@@ -1,11 +1,7 @@
-# AetherCore Prediction Log
+# AETHERCORE — PREDICTION LOG & REVERSE LEARNING
 
-## Ngày 1 — Khởi tạo & M1-E1 Baseline Prediction
-
-### Thí nghiệm: M1-E1 (PlayerKey HashMap Lookup)
-- **Câu hỏi dự đoán cho ứng viên:**
-  > *"Hai `PlayerKey` được tạo riêng biệt nhưng có cùng `UUID` và `serverId`. Nếu dùng một key để `put` vào `HashMap`, rồi dùng key còn lại để `get`, bạn dự đoán điều gì xảy ra? Vì sao?"*
-- **Trạng thái:** `AWAITING_CANDIDATE`
-- **Dự đoán của ứng viên:** *(Chưa ghi nhận - Đang chờ ứng viên tự trả lời)*
-- **Kết quả thực tế quan sát được trong code:** *(Chưa tiết lộ trước khi ứng viên dự đoán)*
-- **Lỗ hổng kiến thức phát hiện:** *(Chưa đánh giá)*
+| Ngày ghi nhận | Mã thực nghiệm / Tình huống | Câu hỏi dự đoán trước khi chạy code | Dự đoán của bạn | Kết quả thực tế quan sát được | Đánh giá & Cơ chế cốt lõi |
+|---|---|---|:---:|:---:|---|
+| 09/10/2026 | **M1-E1 (Biến thể A)** | Hai `PlayerKey` tạo riêng biệt có cùng `playerId` và `serverId` (chưa override `equals`/`hashCode`). Dùng `key1` put vào `HashMap`, dùng `key2` get ra. Kết quả là gì? | `AWAITING_CANDIDATE` | `map.get(key2)` trả về `null`. `HashSet` chứa 2 phần tử riêng biệt. | Mặc định kế thừa `Object.equals()` so sánh địa chỉ tham chiếu (`==`). Hai object cấp phát riêng biệt trên Heap có reference khác nhau. |
+| 09/10/2026 | **M1-E1 (Biến thể B)** | Override `equals()` nhưng không override `hashCode()`. Khi `key1.equals(key2) == true`, `map.get(key2)` có luôn lấy được dữ liệu không? | `AWAITING_CANDIDATE` | Lookup bị `null` khi 2 object có `System.identityHashCode` khác nhau rơi vào 2 bucket khác nhau. | `HashMap` tính bucket index dựa trên `hashCode()`. Nếu hash khác nhau, HashMap tìm sai bucket và không bao giờ gọi tới hàm `equals()`. |
+| 09/10/2026 | **M1-E1 (Biến thể D)** | Put `mutableKey` vào Map, sau đó gọi `mutableKey.setServerId("asia-east-2")`. Dùng chính biến `mutableKey` đó get lại dữ liệu thì được gì? | `AWAITING_CANDIDATE` | `map.get(mutableKey)` trả về `null`. `map.size()` vẫn bằng 1. | Khi hash thay đổi, phép toán tìm bucket trỏ tới ô nhớ mới. Entry ban đầu bị bỏ rơi tại bucket cũ thành **Ghost Entry** gây rò rỉ bộ nhớ. |

@@ -5,7 +5,7 @@ import java.util.UUID;
 /**
  * M1-E1 Baseline Starting Point:
  * PlayerKey represents an entity identifier composed of a player UUID and a server ID.
- * NOTE (Day 1 Baseline): equals() and hashCode() are NOT yet overridden.
+ * NOTE (Day 1 / Day 2 Baseline): equals() and hashCode() are NOT yet overridden (Identity-based).
  */
 public class PlayerKey {
     private final UUID playerId;
