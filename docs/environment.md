@@ -1,26 +1,31 @@
-# AetherCore Environment Specifications (Locked Versions)
+# AETHERCORE — ENVIRONMENT SPECIFICATION & VERIFICATION LOG
+**Ngày cập nhật:** 09/10/2026  
+**Trạng thái môi trường:** Đã kiểm chứng có bằng chứng (PARTIALLY_VERIFIED - Chờ Docker Engine)
 
-- **Ngày ghi nhận thực tế:** 09/10/2026
-- **Operating System:** Windows 11 (build 10.0, amd64)
+---
 
-## 1. Công cụ Cài đặt & Phiên bản Khóa (Locked Versions)
-| Thành phần | Phiên bản thực tế | Ghi chú & Lý do chọn |
-|---|---|---|
-| **JDK Runtime / Compiler** | `Oracle JDK 22 (build 22+36-2370)` | Tương thích hoàn toàn với bytecode target Java 21 LTS (`-release 21`). |
-| **Build Tool (Maven)** | `Apache Maven 3.9.12` | Hỗ trợ đầy đủ compiler release flag và multi-module project. |
-| **Spring Boot** | `3.3.4` | Bản release ổn định của Spring Boot 3.x, tương thích JDK 21/22. |
-| **PostgreSQL Driver** | `42.7.4` | Driver JDBC PostgreSQL chính thức hỗ trợ Type-4 direct socket protocol. |
-| **Testcontainers** | `1.20.2` | Hỗ trợ khởi tạo PostgreSQL container cô lập trong JUnit 5. |
-| **Database Image** | `postgres:16-alpine` | Phiên bản PostgreSQL 16 tinh gọn và nhanh chóng cho testing. |
-| **Docker CLI / Engine** | `Docker CLI 29.5.3` | Engine daemon hiện tại chưa khởi chạy (Local Docker Desktop đang tắt). |
+## 1. Phiên bản công cụ thực tế trên máy host
 
-## 2. Lệnh kiểm tra môi trường đã chạy:
-```bash
-java -version
-javac -version
-mvn -v
-docker --version
-```
+| Công cụ / Runtime | Phiên bản thực tế | Lệnh kiểm tra | Ghi chú & Giới hạn xác minh |
+|---|---|---|---|
+| **Host Java Runtime** | Oracle JDK 22 (build 22+36-2370) | `java -version` | Runtime máy host là JDK 22; mã nguồn được biên dịch với `--release 21` để tương thích bytecode Java 21. |
+| **Java Compiler** | javac 22 | `javac -version` | Sử dụng cờ `-release 21` trong `maven-compiler-plugin`. |
+| **Apache Maven** | 3.9.12 | `mvn -v` | Sử dụng runtime `C:\Program Files\Java\jdk-22`. |
+| **Spring Boot** | 3.3.4 | `pom.xml` / BOM | Quản lý qua BOM `spring-boot-dependencies:3.3.4`. |
+| **PostgreSQL Driver** | 42.7.4 | `backend-app/pom.xml` | Kế thừa version từ Spring Boot BOM. |
+| **Database Migration** | Flyway 10.10.0 (`flyway-core` + `flyway-database-postgresql`) | `backend-app/pom.xml` | Cơ chế migration phiên bản duy nhất tại `db/migration/V1__...` & `V2__...`. |
+| **Testcontainers** | 1.20.2 | `pom.xml` / BOM | Quản lý qua `testcontainers-bom:1.20.2`. |
+| **PostgreSQL Docker Tag** | `postgres:16-alpine` | `LabEntryIntegrationTest.java` | Tag động (mutable tag); image digest sẽ được ghi lại khi container được kéo thực tế. |
+| **Docker CLI** | 29.5.3 (context `desktop-linux`) | `docker info` | CLI sẵn sàng; Docker daemon Windows named pipe (`//./pipe/dockerDesktopLinuxEngine`) chưa khởi động. |
 
-## 3. Giới hạn & Trở ngại Thực tế (Real Constraints):
-- Docker Desktop daemon trên máy chưa được khởi chạy (Docker API pipe unavailable). Do đó, integration test chạy qua Testcontainers sẽ ghi nhận lỗi kết nối container daemon thực tế và không được dùng test mock để báo xanh giả lập.
+---
+
+## 2. Kết quả kiểm chứng Build & Test
+
+- **Production & Test Source Compilation:**  
+  `mvn test-compile` -> **`BUILD SUCCESS`** (0 errors, bytecode target Java 21).
+- **Test Discovery & Execution:**  
+  `mvn test` -> Surefire 3.5.0 JUnitPlatformProvider đã phát hiện `LabEntryIntegrationTest`.
+- **Test Failure Mode:**  
+  Bị chặn tại giai đoạn `GenericContainer.start()` với lỗi: `java.lang.IllegalStateException: Could not find a valid Docker environment` do Docker engine chưa chạy.
+- **Cam kết kỹ thuật:** Tuyệt đối không mock database hoặc dùng H2 in-memory để làm xanh test; giữ nguyên Testcontainers PostgreSQL làm tiêu chuẩn kiểm chứng thật duy nhất.
