@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -31,14 +32,17 @@ public class WrapperAndPrecisionExperimentsTest {
         }
 
         @Test
-        @DisplayName("Wrapper == compares object reference identity, whereas equals() compares value")
+        @DisplayName("Wrapper == compares object reference identity, whereas Objects.equals() compares value")
         void wrapperIdentityVsEquals() {
             Integer w1 = Integer.valueOf(1000);
             Integer w2 = Integer.valueOf(1000);
 
-            // Outside cache: w1 and w2 are distinct object instances on Heap
-            assertFalse(w1 == w2, "Distinct wrapper instances outside cache must not be == ");
-            assertTrue(w1.equals(w2), "Wrapper equals() must compare underlying wrapped primitive value");
+            // Contract: Objects.equals must always be true for equal values (null-safe)
+            assertTrue(Objects.equals(w1, w2), "Wrapper values are equal according to Objects.equals()");
+
+            // Observation on standard OpenJDK without custom -XX:AutoBoxCacheMax:
+            // w1 and w2 are distinct instances on Heap
+            assertFalse(w1 == w2, "Observation: Distinct wrapper instances outside cache are not == on standard JVM");
         }
 
         @Test
@@ -84,17 +88,18 @@ public class WrapperAndPrecisionExperimentsTest {
         }
 
         @Test
-        @DisplayName("Values outside [-128, 127] are not required to be cached (Observation on standard JVM)")
+        @DisplayName("Values outside [-128, 127] satisfy Objects.equals() contract; == is a runtime observation")
         void outsideCacheObservation() {
             Integer out1 = Integer.valueOf(128);
             Integer out2 = Integer.valueOf(128);
 
-            // Contract check: equals is ALWAYS true
-            assertTrue(out1.equals(out2), "equals() is guaranteed true for equal values");
+            // Contract check: Objects.equals is ALWAYS guaranteed true for equal values
+            assertTrue(Objects.equals(out1, out2), "Objects.equals() is guaranteed true for equal values");
 
             // Observation on standard OpenJDK without custom -XX:AutoBoxCacheMax:
-            // out1 and out2 are separate instances
-            assertFalse(out1 == out2, "Observation: 128 is not cached by default and yields separate references");
+            // out1 and out2 are separate instances. Note: if -XX:AutoBoxCacheMax is >= 128, out1 == out2 could be true.
+            boolean sameReference = (out1 == out2);
+            assertFalse(sameReference, "Observation: On standard JVM defaults, 128 yields separate object references");
         }
     }
 
@@ -125,6 +130,19 @@ public class WrapperAndPrecisionExperimentsTest {
             BigDecimal fromValueOf = BigDecimal.valueOf(0.1);
             assertEquals("0.1", fromValueOf.toString());
             assertEquals(fromString, fromValueOf);
+        }
+
+        @Test
+        @DisplayName("BigDecimal.valueOf cannot restore exact decimal after double arithmetic has already introduced error")
+        void valueOfCannotRestoreCalculatedDouble() {
+            double calculatedSum = 0.1 + 0.2; // 0.30000000000000004
+            BigDecimal bdFromDoubleSum = BigDecimal.valueOf(calculatedSum);
+            assertEquals("0.30000000000000004", bdFromDoubleSum.toString());
+            assertNotEquals(new BigDecimal("0.3"), bdFromDoubleSum);
+
+            // Exact calculation requires doing the addition purely in BigDecimal
+            BigDecimal exactSum = new BigDecimal("0.1").add(new BigDecimal("0.2"));
+            assertEquals(new BigDecimal("0.3"), exactSum);
         }
     }
 
@@ -158,19 +176,36 @@ public class WrapperAndPrecisionExperimentsTest {
         }
 
         @Test
-        @DisplayName("OrderPriceCalculator executes exact total calculation according to lab contract")
+        @DisplayName("OrderPriceCalculator executes exact total calculation and normalizes trailing zeros to scale 2")
         void calculatorValidCases() {
-            BigDecimal total = OrderPriceCalculator.calculateTotalPrice("19.99", 3);
-            assertEquals(new BigDecimal("59.97"), total);
-            assertEquals(2, total.scale());
+            // "19.99" -> scale 2
+            BigDecimal total1 = OrderPriceCalculator.calculateTotalPrice("19.99", 3);
+            assertEquals(new BigDecimal("59.97"), total1);
+            assertEquals(2, total1.scale());
 
-            BigDecimal totalWhole = OrderPriceCalculator.calculateTotalPrice("10", 5);
-            assertEquals(new BigDecimal("50.00"), totalWhole);
-            assertEquals(2, totalWhole.scale());
+            // "10" -> scale 0 normalized to 10.00 -> 50.00
+            BigDecimal total2 = OrderPriceCalculator.calculateTotalPrice("10", 5);
+            assertEquals(new BigDecimal("50.00"), total2);
+            assertEquals(2, total2.scale());
+
+            // "10.000" -> scale 3 normalized to 10.00 without loss -> 20.00
+            BigDecimal total3 = OrderPriceCalculator.calculateTotalPrice("10.000", 2);
+            assertEquals(new BigDecimal("20.00"), total3);
+            assertEquals(2, total3.scale());
+
+            // "19.990" -> scale 3 normalized to 19.99 without loss -> 59.97
+            BigDecimal total4 = OrderPriceCalculator.calculateTotalPrice("19.990", 3);
+            assertEquals(new BigDecimal("59.97"), total4);
+            assertEquals(2, total4.scale());
+
+            // "0" -> normalized to 0.00 -> 0.00
+            BigDecimal total5 = OrderPriceCalculator.calculateTotalPrice("0", 1);
+            assertEquals(new BigDecimal("0.00"), total5);
+            assertEquals(2, total5.scale());
         }
 
         @Test
-        @DisplayName("OrderPriceCalculator rejects invalid inputs and scale policy violations")
+        @DisplayName("OrderPriceCalculator rejects invalid inputs and inputs that require rounding to reach scale 2")
         void calculatorRejections() {
             // Negative price
             assertThatThrownBy(() -> OrderPriceCalculator.calculateTotalPrice("-5.00", 1))
@@ -182,10 +217,15 @@ public class WrapperAndPrecisionExperimentsTest {
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Quantity must be strictly positive");
 
-            // Scale violation (> 2 decimals without rounding)
-            assertThatThrownBy(() -> OrderPriceCalculator.calculateTotalPrice("10.999", 2))
+            // Scale violation: "10.001" requires rounding to reach scale 2 -> must be rejected
+            assertThatThrownBy(() -> OrderPriceCalculator.calculateTotalPrice("10.001", 1))
                     .isInstanceOf(IllegalArgumentException.class)
-                    .hasMessageContaining("Unit price exceeds maximum allowed scale of 2");
+                    .hasMessageContaining("Unit price cannot be represented exactly with scale 2 without rounding");
+
+            // Scale violation: "0.001" unit price must be rejected before quantity multiplication
+            assertThatThrownBy(() -> OrderPriceCalculator.calculateTotalPrice("0.001", 10))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Unit price cannot be represented exactly with scale 2 without rounding");
 
             // Malformed number string
             assertThatThrownBy(() -> OrderPriceCalculator.calculateTotalPrice("abc", 2))

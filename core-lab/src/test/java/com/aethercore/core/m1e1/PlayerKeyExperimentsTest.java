@@ -201,6 +201,16 @@ public class PlayerKeyExperimentsTest {
             // Crucial observation: Map size is STILL 1 (the entry is not deleted, it is just lost / unreachable)
             assertEquals(1, map.size(), "Map still holds 1 entry, creating a memory leak / ghost entry");
             assertTrue(map.containsValue("Active Player Session"), "Value is still trapped in the map table");
+
+            // Direct iteration proves entry is physically present in the table iteration even though get() fails
+            boolean foundViaIteration = false;
+            for (Map.Entry<MutablePlayerKey, String> entry : map.entrySet()) {
+                if ("Active Player Session".equals(entry.getValue())) {
+                    foundViaIteration = true;
+                    assertSame(key, entry.getKey());
+                }
+            }
+            assertTrue(foundViaIteration, "Entry is physically present and observable during full map entry iteration");
         }
 
         @Test
