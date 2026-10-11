@@ -1,5 +1,6 @@
 package com.aethercore.backend;
 
+import com.aethercore.core.m1e4.DamageStrategy;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +15,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -54,11 +56,11 @@ public class LabEntryIntegrationTest {
     @DisplayName("Verify Spring DI test configurations from DamageStrategyWiringTest are not scanned into main context")
     void verifyTestConfigurationsAreNotComponentScanned() {
         assertFalse(applicationContext.containsBean("qualifiedConfig"),
-                "QualifiedConfig must not be scanned into main ApplicationContext");
+                "QualifiedConfig bean must not be scanned into main ApplicationContext");
         assertFalse(applicationContext.containsBean("ambiguousConfig"),
-                "AmbiguousConfig must not be scanned into main ApplicationContext");
-        assertFalse(applicationContext.containsBean("physicalDamageStrategy"),
-                "Lab DamageStrategy bean must not be present in main ApplicationContext");
+                "AmbiguousConfig bean must not be scanned into main ApplicationContext");
+        assertEquals(0, applicationContext.getBeanNamesForType(DamageStrategy.class).length,
+                "No DamageStrategy bean should be present in main ApplicationContext");
     }
 
     @Test

@@ -1,5 +1,5 @@
 # AETHERCORE — QUESTION TRACKER (TIẾN ĐỘ PHỎNG VẤN)
-**Cập nhật:** 11/10/2026 (Prompt 07 — Rà soát M1-E4, Gia cố M2-E1A & Đồng bộ Ngân Hàng Câu Hỏi)
+**Cập nhật:** 11/10/2026 (Prompt 08 — Khắc phục Testcontainers & Nghiệm thu Runtime PostgreSQL)
 
 > **Nguyên tắc điều hành:**
 > - Câu hỏi và mã định danh đối chiếu 100% với ngân hàng gốc `500 CAU HOI PV(1).md`.
@@ -24,9 +24,9 @@
 | **J19** | final với biến, method và class mang ý nghĩa gì? | M1-E3 Records & M1-E1 final key fields | PARTIAL | `VERIFIED` (Core Lab) | `AWAITING_CANDIDATE` | - |
 | **J44** | HashSet phát hiện và xử lý phần tử trùng | M1-E1 `PlayerKeyExperimentsTest` | FULL | `VERIFIED` (Core Lab) | `AWAITING_CANDIDATE` | - |
 | **J46** (JC-48) | Cơ chế `put`/`get` của `HashMap` | M1-E1 `PlayerKeyExperimentsTest` | FULL | `VERIFIED` (Core Lab) | `AWAITING_CANDIDATE` | - |
-| **J63** | Race condition; thao tác read/modify/write | M2-E1A `BrokenMarketPurchaseService` | PARTIAL | `IMPLEMENTED_UNVERIFIED` | `AWAITING_CANDIDATE` | - |
-| **J64** | Thread safety và cách kiểm chứng harness đồng thời | M2-E1A `MarketPurchaseConcurrencyTest` | PARTIAL | `IMPLEMENTED_UNVERIFIED` | `AWAITING_CANDIDATE` | - |
-| **J82** | `CountDownLatch`, `CyclicBarrier`, `Semaphore` | M2-E1A (`CyclicBarrier` & `CountDownLatch`) | PARTIAL | `IMPLEMENTED_UNVERIFIED` | `AWAITING_CANDIDATE` | - |
+| **J63** | Race condition; thao tác read/modify/write | M2-E1A `BrokenMarketPurchaseService` (2 worker lost update) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **J64** | Thread safety và cách kiểm chứng harness đồng thời | M2-E1A `MarketPurchaseConcurrencyTest` (latches & nanoTime) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **J82** | `CountDownLatch`, `CyclicBarrier`, `Semaphore` | M2-E1A (`CyclicBarrier` & `CountDownLatch`) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
 | **J101** | Lambda khác anonymous class thế nào? | M1-E4 `lambdaStubDelegation` | PARTIAL | `VERIFIED` (Core Lab) | `AWAITING_CANDIDATE` | - |
 | **J102** | Functional interface là gì? Function, Predicate, Consumer, Supplier dùng khi nào? | M1-E4 `@FunctionalInterface` trên `DamageStrategy` | PARTIAL | `VERIFIED` (Core Lab) | `AWAITING_CANDIDATE` | - |
 | **J107** | Java Record và Shallow Immutability | M1-E3 `RecordExperimentsTest` | FULL | `VERIFIED` (Core Lab) | `AWAITING_CANDIDATE` | - |
@@ -34,10 +34,10 @@
 | **SB04** | Vì sao constructor injection thường phù hợp với dependency bắt buộc hơn field injection? | M1-E4 `DamageStrategyWiringTest` | FULL | `VERIFIED` (Spring DI) | `AWAITING_CANDIDATE` | - |
 | **SB06** | Khi có hai bean cùng kiểu, Spring quyết định inject bean nào? Qualifier và Primary giúp gì? | M1-E4 `DamageStrategyWiringTest` (`@Qualifier` vs `NoUniqueBeanDefinitionException`) | FULL | `VERIFIED` (Spring DI) | `AWAITING_CANDIDATE` | - |
 | **SB07** (SB-08) | Singleton Bean có tự động thread-safe không? Shared mutable state có thể ở đâu? | M1-E4 Stateless strategy services | PARTIAL | `VERIFIED` (Spring DI) | `AWAITING_CANDIDATE` | - |
-| **SB25** | `@Transactional` bắt đầu và kết thúc transaction tại ranh giới nào? | M2-E1A `TransactionTemplate` programmatic boundary & outer rollback test | PARTIAL | `IMPLEMENTED_UNVERIFIED` | `AWAITING_CANDIDATE` | - |
-| **SB27** | REQUIRED, REQUIRES_NEW và NESTED giải quyết những nhu cầu khác nhau nào? | M2-E1A `FixedMarketPurchaseService` (kiểm chứng `PROPAGATION_REQUIRED`) | PARTIAL | `IMPLEMENTED_UNVERIFIED` | `AWAITING_CANDIDATE` | - |
+| **SB25** | `@Transactional` bắt đầu và kết thúc transaction tại ranh giới nào? | M2-E1A `TransactionTemplate` programmatic boundary & outer rollback test | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **SB27** | REQUIRED, REQUIRES_NEW và NESTED giải quyết những nhu cầu khác nhau nào? | M2-E1A `FixedMarketPurchaseService` (kiểm chứng `PROPAGATION_REQUIRED`) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
 | **SQL04** | `NULL`, `0`, chuỗi rỗng `""` và `= NULL` | Chuẩn bị cho các lab DB | NOT_STARTED | - | `AWAITING_CANDIDATE` | - |
-| **SQL53** (DB-07,29) | Transaction: `COMMIT`, `ROLLBACK`, `SAVEPOINT` | M2-E1A Commit & Rollback tests | PARTIAL | `IMPLEMENTED_UNVERIFIED` | `AWAITING_CANDIDATE` | - |
-| **SQL54** | ACID và lỗi từng thuộc tính ngăn chặn | M2-E1A (Atomicity Rollback & Read Committed) | PARTIAL | `IMPLEMENTED_UNVERIFIED` | `AWAITING_CANDIDATE` | - |
-| **SQL55** | Hiện tượng Lost Update vs Dirty Read | M2-E1A Tái hiện Lost Update có kiểm soát | PARTIAL | `IMPLEMENTED_UNVERIFIED` | `AWAITING_CANDIDATE` | - |
-| **SQL56** | Mức cô lập READ COMMITTED của PostgreSQL khi đồng thời | M2-E1A Atomic conditional update & WHERE re-evaluation | PARTIAL | `IMPLEMENTED_UNVERIFIED` | `AWAITING_CANDIDATE` | - |
+| **SQL53** (DB-07,29) | Transaction: `COMMIT`, `ROLLBACK`, `SAVEPOINT` | M2-E1A Commit & Rollback tests trên PostgreSQL 16 | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **SQL54** | ACID và lỗi từng thuộc tính ngăn chặn | M2-E1A (Atomicity Rollback & Read Committed) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **SQL55** | Hiện tượng Lost Update vs Dirty Read | M2-E1A Tái hiện Lost Update thành công trên PostgreSQL 16 | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **SQL56** | Mức cô lập READ COMMITTED của PostgreSQL khi đồng thời | M2-E1A Atomic conditional update & WHERE re-evaluation | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |

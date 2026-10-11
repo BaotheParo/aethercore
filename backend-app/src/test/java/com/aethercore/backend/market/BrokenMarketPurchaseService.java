@@ -27,12 +27,16 @@ public class BrokenMarketPurchaseService {
     public static class WorkerObservation {
         public final long backendPid;
         public final String isolation;
+        public final String lockTimeout;
+        public final String statementTimeout;
         public final long readAvailable;
         public final PurchaseResult result;
 
-        public WorkerObservation(long backendPid, String isolation, long readAvailable, PurchaseResult result) {
+        public WorkerObservation(long backendPid, String isolation, String lockTimeout, String statementTimeout, long readAvailable, PurchaseResult result) {
             this.backendPid = backendPid;
             this.isolation = isolation;
+            this.lockTimeout = lockTimeout;
+            this.statementTimeout = statementTimeout;
             this.readAvailable = readAvailable;
             this.result = result;
         }
@@ -60,9 +64,11 @@ public class BrokenMarketPurchaseService {
         }
 
         return transactionTemplate.execute(status -> {
-            // Record backend PID and isolation for verification
+            // Record backend PID, isolation, lock_timeout, and statement_timeout directly on the worker's transaction connection
             Long backendPid = jdbcTemplate.queryForObject("SELECT pg_backend_pid()", Long.class);
             String isolation = jdbcTemplate.queryForObject("SHOW transaction_isolation", String.class);
+            String lockTimeout = jdbcTemplate.queryForObject("SHOW lock_timeout", String.class);
+            String statementTimeout = jdbcTemplate.queryForObject("SHOW statement_timeout", String.class);
 
             // 1. Stale read: SELECT available without FOR UPDATE
             Long current = jdbcTemplate.queryForObject(
@@ -73,7 +79,7 @@ public class BrokenMarketPurchaseService {
 
             if (current == null || current < quantity) {
                 if (observer != null && backendPid != null) {
-                    observer.accept(new WorkerObservation(backendPid, isolation, current != null ? current : 0L, PurchaseResult.NOT_AVAILABLE));
+                    observer.accept(new WorkerObservation(backendPid, isolation, lockTimeout, statementTimeout, current != null ? current : 0L, PurchaseResult.NOT_AVAILABLE));
                 }
                 return PurchaseResult.NOT_AVAILABLE;
             }
@@ -109,7 +115,7 @@ public class BrokenMarketPurchaseService {
             );
 
             if (observer != null && backendPid != null) {
-                observer.accept(new WorkerObservation(backendPid, isolation, current, PurchaseResult.SUCCESS));
+                observer.accept(new WorkerObservation(backendPid, isolation, lockTimeout, statementTimeout, current, PurchaseResult.SUCCESS));
             }
 
             return PurchaseResult.SUCCESS;

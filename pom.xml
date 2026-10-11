@@ -23,27 +23,27 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring.boot.version>3.3.4</spring.boot.version>
         <postgresql.version>42.7.4</postgresql.version>
-        <testcontainers.version>1.20.2</testcontainers.version>
+        <testcontainers.version>1.21.4</testcontainers.version>
         <junit.jupiter.version>5.10.3</junit.jupiter.version>
         <assertj.version>3.26.3</assertj.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <!-- Testcontainers BOM (Imported BEFORE Spring Boot to ensure Testcontainers 1.21.4 overrides Spring Boot BOM managed version) -->
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <!-- Spring Boot BOM -->
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
                 <version>${spring.boot.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-
-            <!-- Testcontainers BOM -->
-            <dependency>
-                <groupId>org.testcontainers</groupId>
-                <artifactId>testcontainers-bom</artifactId>
-                <version>${testcontainers.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

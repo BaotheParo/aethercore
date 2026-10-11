@@ -61,3 +61,14 @@
 1. **Vì sao `Future.get(timeout)` hoặc `executor.shutdownNow()` chưa chứng minh được JDBC worker thread đã thực sự dừng thao tác trên Database?**
 2. **Vì sao một static nested configuration nằm trong `src/test/java` vẫn có thể ảnh hưởng đến một `@SpringBootTest` khác trong cùng runtime classpath?**
 3. **Làm sao phương thức `purchase()` có thể trả về `PurchaseResult.SUCCESS` mà cuối cùng trong Database lại không có bản ghi purchase nào khi caller sử dụng outer transaction?**
+
+---
+
+## Đính Chính Có Ngày (Prompt 08 Addendum / Errata — 11/10/2026)
+
+1. **Về đề xuất mở TCP 2375 không TLS:**  
+   *Đính chính:* Không khuyến nghị và không sử dụng việc mở cổng TCP `localhost:2375` không có mã hóa/xác thực. Giải pháp chuẩn xác là khắc phục tính tương thích giữa Java client và Docker Engine ngay trên local named pipe chuẩn của hệ điều hành.
+2. **Về nguyên nhân lỗi `BadRequestException Status 400`:**  
+   *Đính chính:* Lỗi không phải do named pipe hỏng hay daemon cấu hình sai, mà do Maven resolve Testcontainers bản `1.19.8` (bị quản lý bởi Spring Boot 3.3.4 BOM do thứ tự import BOM trong root `pom.xml`). Bản `1.19.8` đi kèm `docker-java 3.3.6` chưa hỗ trợ đầy đủ API 1.54 của Docker Engine 29.5.3.
+3. **Giải pháp đã thực thi tại Prompt 08:**  
+   Chuyển `testcontainers-bom:1.21.4` lên trước `spring-boot-dependencies` trong root `pom.xml`, nâng `docker-java` lên `3.4.2`, giúp Testcontainers kết nối trực tiếp và chạy toàn bộ kiểm thử thành công trên Docker Desktop named pipe mặc định.

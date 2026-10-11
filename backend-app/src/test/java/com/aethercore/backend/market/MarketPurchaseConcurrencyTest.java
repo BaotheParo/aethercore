@@ -16,6 +16,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -23,8 +24,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Concurrency and Transaction Integration Test for Market Purchase (M2-E1A).
- * Uses real PostgreSQL container via Testcontainers with enforced harness timeouts,
- * ready latches, distinct exception assertions, and outer transaction boundary verification.
+ * Uses real PostgreSQL container via Testcontainers with monotonic nanoTime deadlines,
+ * multi-phase executor termination cleanup, typed exception and SQLSTATE verification,
+ * and session timeout assertions measured on worker connections.
  */
 @SpringBootTest
 @Testcontainers
@@ -86,6 +88,31 @@ public class MarketPurchaseConcurrencyTest {
         return val != null ? val : 0L;
     }
 
+    private void safeShutdownExecutor(ExecutorService executor, CountDownLatch gate, List<? extends Future<?>> futures) {
+        if (gate != null) {
+            gate.countDown();
+        }
+        if (futures != null) {
+            for (Future<?> f : futures) {
+                if (!f.isDone()) {
+                    f.cancel(true);
+                }
+            }
+        }
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+                if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    fail("Worker threads failed to terminate within cleanup timeout");
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            executor.shutdownNow();
+        }
+    }
+
     @Test
     @DisplayName("Verify PostgreSQL session timeouts are active on worker connections")
     void verifySessionTimeoutsActive() {
@@ -112,19 +139,27 @@ public class MarketPurchaseConcurrencyTest {
             futures.add(executor.submit(() -> brokenService.purchaseWithObservation(UUID.randomUUID(), sku, 1, observations::add)));
             futures.add(executor.submit(() -> brokenService.purchaseWithObservation(UUID.randomUUID(), sku, 1, observations::add)));
 
-            long globalDeadline = System.currentTimeMillis() + 10000;
+            long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
             for (Future<PurchaseResult> f : futures) {
-                long remaining = Math.max(1, globalDeadline - System.currentTimeMillis());
-                PurchaseResult r = f.get(remaining, TimeUnit.MILLISECONDS);
+                long remainingNanos = deadlineNanos - System.nanoTime();
+                if (remainingNanos <= 0) {
+                    throw new TimeoutException("Global monotonic deadline expired waiting for worker future");
+                }
+                PurchaseResult r = f.get(remainingNanos, TimeUnit.NANOSECONDS);
                 assertEquals(PurchaseResult.SUCCESS, r);
             }
 
-            // Verify observations: 2 distinct PostgreSQL sessions, both read 1
+            // Verify observations measured on each worker's own connection inside transaction
             assertEquals(2, observations.size());
             assertNotEquals(observations.get(0).backendPid, observations.get(1).backendPid, "Must run in two distinct backend sessions");
+            assertEquals("read committed", observations.get(0).isolation);
+            assertEquals("read committed", observations.get(1).isolation);
+            assertEquals("5s", observations.get(0).lockTimeout, "Worker 1 has lock_timeout 5s");
+            assertEquals("5s", observations.get(1).lockTimeout, "Worker 2 has lock_timeout 5s");
+            assertEquals("10s", observations.get(0).statementTimeout, "Worker 1 has statement_timeout 10s");
+            assertEquals("10s", observations.get(1).statementTimeout, "Worker 2 has statement_timeout 10s");
             assertEquals(1L, observations.get(0).readAvailable, "Worker 1 read initial available 1");
             assertEquals(1L, observations.get(1).readAvailable, "Worker 2 read stale available 1");
-            assertEquals("read committed", observations.get(0).isolation);
 
             long finalStock = getStock(sku);
             long totalQuantity = getSumPurchasedQuantity(sku);
@@ -137,13 +172,7 @@ public class MarketPurchaseConcurrencyTest {
             // INVARIANT VIOLATION: finalStock (0) + totalQuantity (2) != initialStock (1)
             assertNotEquals(1L, finalStock + totalQuantity, "Broken service violates invariant due to lost update");
         } finally {
-            for (Future<?> f : futures) {
-                if (!f.isDone()) f.cancel(true);
-            }
-            executor.shutdown();
-            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-                executor.shutdownNow();
-            }
+            safeShutdownExecutor(executor, null, futures);
         }
     }
 
@@ -176,11 +205,14 @@ public class MarketPurchaseConcurrencyTest {
             assertTrue(allReady, "Both workers must be ready before gate release");
             startGate.countDown();
 
-            long globalDeadline = System.currentTimeMillis() + 10000;
+            long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
             List<PurchaseResult> results = new ArrayList<>();
             for (Future<PurchaseResult> f : futures) {
-                long remaining = Math.max(1, globalDeadline - System.currentTimeMillis());
-                results.add(f.get(remaining, TimeUnit.MILLISECONDS));
+                long remainingNanos = deadlineNanos - System.nanoTime();
+                if (remainingNanos <= 0) {
+                    throw new TimeoutException("Global monotonic deadline expired waiting for worker future");
+                }
+                results.add(f.get(remainingNanos, TimeUnit.NANOSECONDS));
             }
 
             long successCount = results.stream().filter(r -> r == PurchaseResult.SUCCESS).count();
@@ -198,14 +230,7 @@ public class MarketPurchaseConcurrencyTest {
             assertEquals(1L, totalQuantity);
             assertEquals(1L, finalStock + totalQuantity, "Invariant holds: finalStock (0) + totalQuantity (1) == initialStock (1)");
         } finally {
-            startGate.countDown();
-            for (Future<?> f : futures) {
-                if (!f.isDone()) f.cancel(true);
-            }
-            executor.shutdown();
-            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-                executor.shutdownNow();
-            }
+            safeShutdownExecutor(executor, startGate, futures);
         }
     }
 
@@ -273,15 +298,23 @@ public class MarketPurchaseConcurrencyTest {
         assertEquals(1, getPurchaseCount(sku));
 
         // 2. Fault injection: Attempt duplicate UUID insertion, causing PK collision on market_purchase
-        Exception ex = assertThrows(Exception.class, () -> {
+        DuplicateKeyException ex = assertThrows(DuplicateKeyException.class, () -> {
             fixedService.purchase(fixedPurchaseId, sku, 1);
         });
 
-        // 3. Verify specific DuplicateKeyException or SQLSTATE 23505
-        boolean isDuplicateKey = (ex instanceof DuplicateKeyException)
-                || (ex.getCause() != null && ex.getCause().getMessage().contains("23505"))
-                || (ex.getMessage() != null && ex.getMessage().contains("market_purchase_pkey"));
-        assertTrue(isDuplicateKey, "Exception must specifically be duplicate primary key violation on market_purchase, got: " + ex);
+        // 3. Verify specific PostgreSQL SQLSTATE 23505 via SQLException cause traversal
+        boolean found23505 = false;
+        Throwable current = ex;
+        while (current != null) {
+            if (current instanceof SQLException sqlEx) {
+                if ("23505".equals(sqlEx.getSQLState())) {
+                    found23505 = true;
+                    break;
+                }
+            }
+            current = current.getCause();
+        }
+        assertTrue(found23505, "SQLException cause chain must contain SQLSTATE 23505 (unique_violation)");
 
         // 4. Verify complete rollback: stock is NOT decremented to 0, remains 1!
         assertEquals(1L, getStock(sku), "Stock must remain 1 after transaction rollback");
@@ -319,12 +352,15 @@ public class MarketPurchaseConcurrencyTest {
             assertTrue(initialReady, "First pool of workers must be ready before start gate opening");
             startGate.countDown();
 
-            long globalDeadline = System.currentTimeMillis() + 15000;
+            long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(15);
             int successCount = 0;
             int notAvailableCount = 0;
             for (Future<PurchaseResult> f : futures) {
-                long remaining = Math.max(1, globalDeadline - System.currentTimeMillis());
-                PurchaseResult res = f.get(remaining, TimeUnit.MILLISECONDS);
+                long remainingNanos = deadlineNanos - System.nanoTime();
+                if (remainingNanos <= 0) {
+                    throw new TimeoutException("Global monotonic deadline expired waiting for load worker future");
+                }
+                PurchaseResult res = f.get(remainingNanos, TimeUnit.NANOSECONDS);
                 if (res == PurchaseResult.SUCCESS) {
                     successCount++;
                 } else if (res == PurchaseResult.NOT_AVAILABLE) {
@@ -344,14 +380,7 @@ public class MarketPurchaseConcurrencyTest {
             assertEquals(5L, totalQuantity);
             assertEquals(5L, finalStock + totalQuantity, "Invariant holds under concurrent load");
         } finally {
-            startGate.countDown();
-            for (Future<?> f : futures) {
-                if (!f.isDone()) f.cancel(true);
-            }
-            executor.shutdown();
-            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-                executor.shutdownNow();
-            }
+            safeShutdownExecutor(executor, startGate, futures);
         }
     }
 
