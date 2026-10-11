@@ -9,9 +9,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.beans.factory.NoUniqueBeanDefinitionException;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -20,11 +20,14 @@ import static org.junit.jupiter.api.Assertions.*;
  * Pure Spring Context test using AnnotationConfigApplicationContext to verify:
  * 1. Successful Constructor Injection disambiguation using @Qualifier.
  * 2. Real Constructor Injection FAILURE when multiple beans exist without qualifier.
+ *
+ * Uses @TestConfiguration(proxyBeanMethods = false) so that these test configurations
+ * are NOT inadvertently picked up by component scanning when running full @SpringBootTest suites.
  */
 public class DamageStrategyWiringTest {
 
     // === Context 1: Qualified Configuration (Success) ===
-    @Configuration
+    @TestConfiguration(proxyBeanMethods = false)
     static class QualifiedConfig {
         @Bean("physicalDamageStrategy")
         public DamageStrategy physicalDamageStrategy() {
@@ -60,7 +63,7 @@ public class DamageStrategyWiringTest {
     }
 
     // === Context 2: Ambiguous Configuration (Constructor Injection Failure) ===
-    @Configuration
+    @TestConfiguration(proxyBeanMethods = false)
     static class AmbiguousConfig {
         @Bean("physicalDamageStrategy")
         public DamageStrategy physicalDamageStrategy() {
@@ -107,8 +110,7 @@ public class DamageStrategyWiringTest {
     @Test
     @DisplayName("Context 2: Consumer without @Qualifier fails context initialization with NoUniqueBeanDefinitionException")
     void ambiguousConstructorInjectionFailsInitialization() {
-        AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
-        try {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             context.register(AmbiguousConfig.class);
 
             // Refreshing the context triggers eager singleton creation.
@@ -121,8 +123,6 @@ public class DamageStrategyWiringTest {
             assertNotNull(rootCause);
             assertTrue(rootCause instanceof NoUniqueBeanDefinitionException,
                     "Root cause must be NoUniqueBeanDefinitionException (got: " + rootCause.getClass().getName() + ")");
-        } finally {
-            context.close();
         }
     }
 }

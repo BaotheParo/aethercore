@@ -3,7 +3,7 @@
 **Module:** M2 — Database & Concurrency  
 **Lab Code:** M2-E1A  
 **Chủ đề:** Stale read-then-write (Lost Update), Atomic Conditional UPDATE, Transaction Boundaries với Spring `TransactionTemplate` trên PostgreSQL READ COMMITTED.  
-**Trạng thái kiểm chứng Runtime:** `BLOCKED_RUNTIME` (Docker Desktop daemon chưa bật trên máy host Windows). Code và schema đã hoàn thiện 100% và vượt qua `mvn -pl backend-app -am test-compile`.
+**Trạng thái kiểm chứng Runtime:** `BLOCKED_RUNTIME` (Docker Desktop daemon đang chạy, nhưng Testcontainers client gặp lỗi BadRequestException Status 400 trên Windows named pipe). Mã nguồn và test suite đã hoàn thiện 100% và vượt qua `mvn -pl backend-app -am test-compile`.
 
 ---
 
@@ -16,7 +16,7 @@ $$\text{stock}_{\text{cuối}} + \sum \text{quantity}_{\text{purchase đã commi
 
 Đồng thời:
 - $\text{available} \ge 0$ (được bảo vệ ở tầng DB bằng CHECK constraint).
-- Mỗi kết quả `SUCCESS` trả về phải tương ứng với đúng một bản ghi trong `market_purchase`.
+- Mỗi kết quả `SUCCESS` trả về trong một transaction commit thành công phải tương ứng với đúng một bản ghi trong `market_purchase`.
 
 ### 1.2. Schema (`V3__create_market_tables.sql`)
 ```sql
@@ -33,13 +33,13 @@ CREATE TABLE IF NOT EXISTS market_purchase (
 );
 ```
 
-> **Lưu ý cốt lõi:** Ràng buộc `CHECK (available >= 0)` chỉ ngăn chặn giá trị âm được ghi vào DB. Ràng buộc này **hoàn toàn bất lực** trước lỗi Lost Update (ghi đè giá trị cũ không âm, ví dụ ghi đè 0 lên 0).
+> **Lưu ý về ràng buộc CHECK:** Ràng buộc `CHECK (available >= 0)` được engine database đánh giá khi thực thi câu lệnh ghi/cập nhật hàng vào DB. Ràng buộc này ngăn chặn các giá trị âm, nhưng **hoàn toàn bất lực** trước lỗi Lost Update (ghi đè một giá trị không âm cũ, ví dụ ghi đè 0 lên 0).
 
 ---
 
 ## 2. Ví dụ đời thường & Phân tích cơ chế
 
-### 2.1. Phép ẩn dụ đời thường
+### 2.1. Phép ẩn dụ đời thường (Minh họa logic nghiệp vụ)
 Tưởng tượng một cửa hàng chỉ còn **1 món đồ duy nhất** trên kệ (stock = 1):
 1. **Nhân viên A** nhìn vào sổ kho thấy ghi "Còn 1 món".
 2. **Nhân viên B** gần như cùng lúc nhìn vào sổ kho cũng thấy ghi "Còn 1 món".
@@ -48,7 +48,9 @@ Tưởng tượng một cửa hàng chỉ còn **1 món đồ duy nhất** trên
 
 **Hậu quả:** Sổ kho vẫn ghi "Còn 0 món" (hợp lệ $\ge 0$), nhưng đã xuất ra **2 hóa đơn** cho chỉ 1 món hàng ban đầu! Bất biến $0 + 2 = 2 \ne 1$ bị phá vỡ hoàn toàn.
 
-### 2.2. Ánh xạ kỹ thuật (Broken Schedule vs Fixed Schedule)
+*(Lưu ý: Ví dụ này minh họa lỗi logic ứng dụng, không thay thế cơ chế khóa và cô lập dòng của Database engine).*
+
+### 2.2. Lịch thực thi theo cơ chế (Mechanism Schedules)
 
 ```
 [Broken Schedule: Stale Read-then-Write]
@@ -65,7 +67,7 @@ COMMIT                                                                     Relea
                                      INSERT purchase (ID2, qty 1)          Ghi purchase 2
                                      COMMIT                                Release Row Lock
 ------------------------------------------------------------------------------------------------------
-Kết quả: Stock = 0, Purchases = 2, SUM(quantity) = 2. Invariant bị vi phạm!
+Kết quả thiết kế: Stock = 0, Purchases = 2, SUM(quantity) = 2. Invariant bị vi phạm!
 ```
 
 ```
@@ -83,31 +85,27 @@ COMMIT                                                                     T1 co
                                      PostgreSQL re-evaluates WHERE clause trên row version mới nhất!
                                      Row version mới có available = 0 < 1 => Condition FALSE!
                                      Affected rows = 0
-                                     Rollback/No insert => Trả về NOT_AVAILABLE
+                                     Callback trả về NOT_AVAILABLE (không insert purchase)
 ------------------------------------------------------------------------------------------------------
-Kết quả: Stock = 0, Purchases = 1, SUM(quantity) = 1. Invariant được bảo toàn!
+Kết quả thiết kế: Stock = 0, Purchases = 1, SUM(quantity) = 1. Invariant được bảo toàn!
 ```
 
 ---
 
-## 3. Ranh giới Transaction & Thiết kế Implementation
+## 3. Ranh giới Transaction & Hợp đồng SUCCESS
 
-### 3.1. Spring `TransactionTemplate`
-Thay vì dùng `@Transactional` (dựa trên Spring AOP Proxy, dễ bị lỗi nuốt proxy/self-invocation hoặc cấu hình che giấu ranh giới), M2-E1A sử dụng `TransactionTemplate` với cấu hình tường minh:
+### 3.1. Spring `TransactionTemplate` & Propagation
+Service sử dụng `TransactionTemplate` với cấu hình tường minh:
 ```java
 this.transactionTemplate = new TransactionTemplate(transactionManager);
 this.transactionTemplate.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+this.transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
 ```
 
-### 3.2. Mã nguồn triển khai
-- **Fixed Service:** `FixedMarketPurchaseService.java`
-  Thực hiện validation tham số ($quantity > 0$, null checks).
-  Thực hiện atomic conditional update:
-  `UPDATE market_stock SET available = available - ? WHERE sku = ? AND available >= ?`
-  Nếu affected rows == 1: ghi log vào `market_purchase` trong cùng transaction, trả về `PurchaseResult.SUCCESS`.
-  Nếu affected rows == 0: không insert, trả về `PurchaseResult.NOT_AVAILABLE`.
-- **Broken Service:** `BrokenMarketPurchaseService.java` (chỉ nằm trong test source)
-  Sử dụng `CyclicBarrier(2)` đặt ngay sau `SELECT available` và trước `UPDATE available = 0` để ép 2 connection đọc cùng giá trị snapshot ban đầu.
+### 3.2. Hợp đồng SUCCESS và Transaction bên ngoài
+- **Khi caller không có transaction:** `TransactionTemplate` mở một transaction mới. Kết quả `PurchaseResult.SUCCESS` chỉ được trả về sau khi lệnh decrement và insert đã hoàn tất và transaction do template sở hữu đã commit thành công.
+- **Khi caller đã có transaction (REQUIRED):** `FixedMarketPurchaseService` tham gia vào transaction của caller. Lúc này, `SUCCESS` chỉ xác nhận rằng thao tác trừ kho và insert purchase đã diễn ra hợp lệ trong transaction hiện tại. **Nếu outer transaction sau đó gặp lỗi và rollback, toàn bộ giao dịch mua hàng này cũng sẽ bị rollback theo.**
+- **NOT_AVAILABLE:** Được trả về khi `affected rows == 0` (hết hàng hoặc sai SKU). Transaction kết thúc bình thường mà không ghi thêm dữ liệu (không bắt buộc phải rollback).
 
 ---
 
@@ -119,8 +117,8 @@ this.transactionTemplate.setIsolationLevel(TransactionDefinition.ISOLATION_READ_
    - Kết quả: `BUILD SUCCESS` (0 compiler warnings/errors).
 2. **Thực thi trên Docker / PostgreSQL Testcontainers:**
    - Trạng thái: `BLOCKED_RUNTIME`
-   - Nguyên nhân cụ thể: Docker Desktop engine chưa được bật trên máy Windows (`npipe:////./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified`).
-   - Lệnh chạy lại khi Docker sẵn sàng:
+   - Nguyên nhân cụ thể: Docker Desktop engine đang chạy trên Windows host (CLI `docker run --rm hello-world` chạy thành công), nhưng Testcontainers client phiên bản hiện tại gặp lỗi `BadRequestException (Status 400)` khi gọi endpoint `/info` qua Windows named pipe (`npipe:////./pipe/docker_engine`).
+   - Lệnh chạy lại khi cấu hình môi trường test được khắc phục:
      ```bash
      mvn -pl backend-app -am "-Dtest=MarketPurchaseConcurrencyTest" "-Dsurefire.failIfNoSpecifiedTests=false" test
      ```
@@ -135,7 +133,7 @@ Mức cô lập READ COMMITTED chỉ cam kết không đọc dữ liệu chưa c
 
 ### Câu 2: Vì sao CHECK stock >= 0 không phát hiện broken case này?
 *Đáp án tham khảo:*
-Ràng buộc `CHECK (available >= 0)` là một constraint kiểm tra giá trị của cột tại thời điểm ghi dòng đó vào đĩa. Trong kịch bản broken, worker 1 ghi giá trị $0 \ge 0$ (hợp lệ), worker 2 sau đó cũng ghi giá trị $0 \ge 0$ (vẫn hợp lệ). DB chỉ thấy hai lần ghi giá trị 0 hợp lệ, hoàn toàn không biết rằng logic ứng dụng đã bán vượt quá 1 sản phẩm.
+Ràng buộc `CHECK (available >= 0)` là một constraint kiểm tra giá trị của cột tại thời điểm ghi/cập nhật dòng đó vào DB. Trong kịch bản broken, worker 1 ghi giá trị $0 \ge 0$ (hợp lệ), worker 2 sau đó cũng ghi giá trị $0 \ge 0$ (vẫn hợp lệ). DB chỉ thấy hai lần ghi giá trị 0 hợp lệ, hoàn toàn không biết rằng logic ứng dụng đã bán vượt quá 1 sản phẩm do lost update.
 
 ### Câu 3: Điều kiện WHERE và affected rows giúp quyết định bán như thế nào?
 *Đáp án tham khảo:*
@@ -147,9 +145,9 @@ Câu lệnh `UPDATE market_stock SET available = available - ? WHERE sku = ? AND
 
 ### Câu 5: Barrier nên đặt ở đâu? Đặt sau UPDATE có thể khiến test treo ra sao?
 *Đáp án tham khảo:*
-Trong kịch bản tái hiện race condition, `CyclicBarrier` phải đặt **sau SELECT và trước UPDATE**. Nếu đặt sau UPDATE, worker thứ nhất sẽ chạy câu lệnh UPDATE và giữ row lock của dòng `market_stock`. Worker thứ hai khi gọi UPDATE sẽ bị PostgreSQL chặn (block) để chờ worker thứ nhất nhả lock (commit). Do worker 2 bị block ở tầng JDBC/DB và không bao giờ chạm tới điểm `barrier.await()`, worker 1 cũng sẽ chờ vô tận tại barrier $\rightarrow$ toàn bộ test rơi vào deadlock/treo vĩnh viễn (harness deadlock).
+Trong kịch bản tái hiện race condition, `CyclicBarrier` phải đặt **sau SELECT và trước UPDATE**. Nếu đặt sau UPDATE, worker thứ nhất sẽ chạy câu lệnh UPDATE và giữ row lock của dòng `market_stock`. Worker thứ hai khi gọi UPDATE sẽ bị PostgreSQL chặn (block) để chờ worker thứ nhất nhả lock (commit). Do worker 2 bị block ở tầng JDBC/DB và không bao giờ chạm tới điểm `barrier.await()`, worker 1 cũng sẽ chờ tại barrier cho đến khi timeout (hoặc gây deadlock nếu không có timeout).
 
 ### Câu 6: Test này đã và chưa chứng minh điều gì về hệ thống nhiều instance, idempotency và hiệu năng?
 *Đáp án tham khảo:*
-- **Đã chứng minh:** Chứng minh tính đúng đắn về mặt dữ liệu (concurrency correctness & ACID) của atomic conditional update và rollback trong một cơ sở dữ liệu PostgreSQL quan hệ duy nhất, độc lập với số lượng thread hay instance ứng dụng gọi vào.
-- **Chưa chứng minh:** Chưa chứng minh tính lũy kế/idempotency của API khi client retry do timeout mạng; chưa đo đạc throughput, độ trễ p99 khi có lock contention lớn; và chưa giải quyết bài toán phân tán nhiều database sharding/partitioning.
+- **Phạm vi chứng minh theo thiết kế:** Thiết kế kiểm chứng tính đúng đắn về mặt dữ liệu (concurrency correctness & ACID) của atomic conditional update và rollback trong một cơ sở dữ liệu PostgreSQL quan hệ duy nhất, độc lập với số lượng thread gọi vào trong cùng một instance.
+- **Giới hạn chưa chứng minh:** Chưa chứng minh tính lũy kế/idempotency của API khi client retry do timeout mạng; chưa chứng minh khả năng chịu tải hoặc đo đạc throughput/p99 dưới độ tranh chấp cao; và chưa giải quyết bài toán phân tán nhiều database sharding/partitioning.

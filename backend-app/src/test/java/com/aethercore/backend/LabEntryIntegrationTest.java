@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -13,6 +14,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -20,6 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Integration test against real PostgreSQL container via Testcontainers.
  * Validates the full request pipeline:
  * MockMvc HTTP Request -> DispatcherServlet -> LabEntryController -> LabEntryRepository -> Real PostgreSQL Container
+ * Also verifies that test-scoped DI configurations are not accidentally component-scanned into the main context.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -43,6 +46,20 @@ public class LabEntryIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private ApplicationContext applicationContext;
+
+    @Test
+    @DisplayName("Verify Spring DI test configurations from DamageStrategyWiringTest are not scanned into main context")
+    void verifyTestConfigurationsAreNotComponentScanned() {
+        assertFalse(applicationContext.containsBean("qualifiedConfig"),
+                "QualifiedConfig must not be scanned into main ApplicationContext");
+        assertFalse(applicationContext.containsBean("ambiguousConfig"),
+                "AmbiguousConfig must not be scanned into main ApplicationContext");
+        assertFalse(applicationContext.containsBean("physicalDamageStrategy"),
+                "Lab DamageStrategy bean must not be present in main ApplicationContext");
+    }
 
     @Test
     @DisplayName("GET /api/lab/entries/{id} returns 200 OK and data when ID exists in PostgreSQL")

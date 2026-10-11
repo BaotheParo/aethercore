@@ -5,11 +5,13 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -21,12 +23,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Concurrency and Transaction Integration Test for Market Purchase (M2-E1A).
- * Uses real PostgreSQL container via Testcontainers to verify:
- * 1. Stale read-then-write (lost update) in broken service violating invariant.
- * 2. Atomic conditional update in fixed service preserving invariant under concurrency.
- * 3. Validation and edge case handling.
- * 4. Atomicity and rollback on constraint failure.
- * 5. Multi-attempt correctness under concurrency.
+ * Uses real PostgreSQL container via Testcontainers with enforced harness timeouts,
+ * ready latches, distinct exception assertions, and outer transaction boundary verification.
  */
 @SpringBootTest
 @Testcontainers
@@ -45,6 +43,13 @@ public class MarketPurchaseConcurrencyTest {
         registry.add("spring.datasource.password", postgres::getPassword);
         registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.sql.init.mode", () -> "always");
+
+        // Enforce finite timeouts on test DataSource connections
+        registry.add("spring.datasource.hikari.connection-timeout", () -> "5000"); // 5s connection acquisition
+        registry.add("spring.datasource.hikari.maximum-pool-size", () -> "10");
+        registry.add("spring.datasource.hikari.minimum-idle", () -> "4");
+        // Apply session timeouts for PostgreSQL: lock_timeout 5s, statement_timeout 10s
+        registry.add("spring.datasource.hikari.connection-init-sql", () -> "SET lock_timeout = '5s'; SET statement_timeout = '10s';");
     }
 
     @Autowired
@@ -82,6 +87,15 @@ public class MarketPurchaseConcurrencyTest {
     }
 
     @Test
+    @DisplayName("Verify PostgreSQL session timeouts are active on worker connections")
+    void verifySessionTimeoutsActive() {
+        String lockTimeout = jdbcTemplate.queryForObject("SHOW lock_timeout", String.class);
+        String statementTimeout = jdbcTemplate.queryForObject("SHOW statement_timeout", String.class);
+        assertEquals("5s", lockTimeout, "lock_timeout must be configured to 5s");
+        assertEquals("10s", statementTimeout, "statement_timeout must be configured to 10s");
+    }
+
+    @Test
     @DisplayName("B2. Broken Service: two concurrent buyers on stock 1 reproduce lost update and violate invariant")
     void brokenService_twoBuyersOnOneStock_reproducesLostUpdate() throws Exception {
         String sku = "REDSTONE";
@@ -90,17 +104,27 @@ public class MarketPurchaseConcurrencyTest {
         CyclicBarrier barrier = new CyclicBarrier(2);
         BrokenMarketPurchaseService brokenService = new BrokenMarketPurchaseService(jdbcTemplate, transactionManager, barrier);
 
+        List<BrokenMarketPurchaseService.WorkerObservation> observations = Collections.synchronizedList(new ArrayList<>());
         ExecutorService executor = Executors.newFixedThreadPool(2);
+        List<Future<PurchaseResult>> futures = new ArrayList<>();
+
         try {
-            Future<PurchaseResult> f1 = executor.submit(() -> brokenService.purchase(UUID.randomUUID(), sku, 1));
-            Future<PurchaseResult> f2 = executor.submit(() -> brokenService.purchase(UUID.randomUUID(), sku, 1));
+            futures.add(executor.submit(() -> brokenService.purchaseWithObservation(UUID.randomUUID(), sku, 1, observations::add)));
+            futures.add(executor.submit(() -> brokenService.purchaseWithObservation(UUID.randomUUID(), sku, 1, observations::add)));
 
-            PurchaseResult r1 = f1.get(5, TimeUnit.SECONDS);
-            PurchaseResult r2 = f2.get(5, TimeUnit.SECONDS);
+            long globalDeadline = System.currentTimeMillis() + 10000;
+            for (Future<PurchaseResult> f : futures) {
+                long remaining = Math.max(1, globalDeadline - System.currentTimeMillis());
+                PurchaseResult r = f.get(remaining, TimeUnit.MILLISECONDS);
+                assertEquals(PurchaseResult.SUCCESS, r);
+            }
 
-            // Both workers read 1, both wrote available = 0, both committed
-            assertEquals(PurchaseResult.SUCCESS, r1);
-            assertEquals(PurchaseResult.SUCCESS, r2);
+            // Verify observations: 2 distinct PostgreSQL sessions, both read 1
+            assertEquals(2, observations.size());
+            assertNotEquals(observations.get(0).backendPid, observations.get(1).backendPid, "Must run in two distinct backend sessions");
+            assertEquals(1L, observations.get(0).readAvailable, "Worker 1 read initial available 1");
+            assertEquals(1L, observations.get(1).readAvailable, "Worker 2 read stale available 1");
+            assertEquals("read committed", observations.get(0).isolation);
 
             long finalStock = getStock(sku);
             long totalQuantity = getSumPurchasedQuantity(sku);
@@ -113,7 +137,13 @@ public class MarketPurchaseConcurrencyTest {
             // INVARIANT VIOLATION: finalStock (0) + totalQuantity (2) != initialStock (1)
             assertNotEquals(1L, finalStock + totalQuantity, "Broken service violates invariant due to lost update");
         } finally {
-            executor.shutdownNow();
+            for (Future<?> f : futures) {
+                if (!f.isDone()) f.cancel(true);
+            }
+            executor.shutdown();
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
         }
     }
 
@@ -123,23 +153,36 @@ public class MarketPurchaseConcurrencyTest {
         String sku = "REDSTONE";
         seedStock(sku, 1L);
 
+        CountDownLatch readyLatch = new CountDownLatch(2);
         CountDownLatch startGate = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
+        List<Future<PurchaseResult>> futures = new ArrayList<>();
+
         try {
             Callable<PurchaseResult> task = () -> {
-                startGate.await(5, TimeUnit.SECONDS);
+                readyLatch.countDown();
+                boolean opened = startGate.await(5, TimeUnit.SECONDS);
+                if (!opened) {
+                    throw new IllegalStateException("startGate timed out waiting to open");
+                }
                 return fixedService.purchase(UUID.randomUUID(), sku, 1);
             };
 
-            Future<PurchaseResult> f1 = executor.submit(task);
-            Future<PurchaseResult> f2 = executor.submit(task);
+            futures.add(executor.submit(task));
+            futures.add(executor.submit(task));
 
+            // Ensure both workers are ready before countdown
+            boolean allReady = readyLatch.await(5, TimeUnit.SECONDS);
+            assertTrue(allReady, "Both workers must be ready before gate release");
             startGate.countDown();
 
-            PurchaseResult r1 = f1.get(5, TimeUnit.SECONDS);
-            PurchaseResult r2 = f2.get(5, TimeUnit.SECONDS);
+            long globalDeadline = System.currentTimeMillis() + 10000;
+            List<PurchaseResult> results = new ArrayList<>();
+            for (Future<PurchaseResult> f : futures) {
+                long remaining = Math.max(1, globalDeadline - System.currentTimeMillis());
+                results.add(f.get(remaining, TimeUnit.MILLISECONDS));
+            }
 
-            List<PurchaseResult> results = List.of(r1, r2);
             long successCount = results.stream().filter(r -> r == PurchaseResult.SUCCESS).count();
             long notAvailableCount = results.stream().filter(r -> r == PurchaseResult.NOT_AVAILABLE).count();
 
@@ -155,7 +198,14 @@ public class MarketPurchaseConcurrencyTest {
             assertEquals(1L, totalQuantity);
             assertEquals(1L, finalStock + totalQuantity, "Invariant holds: finalStock (0) + totalQuantity (1) == initialStock (1)");
         } finally {
-            executor.shutdownNow();
+            startGate.countDown();
+            for (Future<?> f : futures) {
+                if (!f.isDone()) f.cancel(true);
+            }
+            executor.shutdown();
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
         }
     }
 
@@ -223,13 +273,21 @@ public class MarketPurchaseConcurrencyTest {
         assertEquals(1, getPurchaseCount(sku));
 
         // 2. Fault injection: Attempt duplicate UUID insertion, causing PK collision on market_purchase
-        assertThrows(DataAccessException.class, () -> {
+        Exception ex = assertThrows(Exception.class, () -> {
             fixedService.purchase(fixedPurchaseId, sku, 1);
         });
 
-        // 3. Verify complete rollback: stock is NOT decremented to 0, remains 1!
+        // 3. Verify specific DuplicateKeyException or SQLSTATE 23505
+        boolean isDuplicateKey = (ex instanceof DuplicateKeyException)
+                || (ex.getCause() != null && ex.getCause().getMessage().contains("23505"))
+                || (ex.getMessage() != null && ex.getMessage().contains("market_purchase_pkey"));
+        assertTrue(isDuplicateKey, "Exception must specifically be duplicate primary key violation on market_purchase, got: " + ex);
+
+        // 4. Verify complete rollback: stock is NOT decremented to 0, remains 1!
         assertEquals(1L, getStock(sku), "Stock must remain 1 after transaction rollback");
         assertEquals(1, getPurchaseCount(sku), "Purchase count must remain 1");
+        assertEquals(1L, getSumPurchasedQuantity(sku), "SUM(quantity) must remain 1");
+        assertEquals(2L, getStock(sku) + getSumPurchasedQuantity(sku), "Invariant holds after rollback");
     }
 
     @Test
@@ -241,23 +299,32 @@ public class MarketPurchaseConcurrencyTest {
         int attempts = 20;
         int poolSize = 4;
         ExecutorService executor = Executors.newFixedThreadPool(poolSize);
+        CountDownLatch readyLatch = new CountDownLatch(poolSize);
         CountDownLatch startGate = new CountDownLatch(1);
 
         List<Future<PurchaseResult>> futures = new ArrayList<>();
         try {
             for (int i = 0; i < attempts; i++) {
                 futures.add(executor.submit(() -> {
-                    startGate.await(5, TimeUnit.SECONDS);
+                    readyLatch.countDown();
+                    boolean opened = startGate.await(5, TimeUnit.SECONDS);
+                    if (!opened) {
+                        throw new IllegalStateException("startGate timed out in worker");
+                    }
                     return fixedService.purchase(UUID.randomUUID(), sku, 1);
                 }));
             }
 
+            boolean initialReady = readyLatch.await(5, TimeUnit.SECONDS);
+            assertTrue(initialReady, "First pool of workers must be ready before start gate opening");
             startGate.countDown();
 
+            long globalDeadline = System.currentTimeMillis() + 15000;
             int successCount = 0;
             int notAvailableCount = 0;
             for (Future<PurchaseResult> f : futures) {
-                PurchaseResult res = f.get(10, TimeUnit.SECONDS);
+                long remaining = Math.max(1, globalDeadline - System.currentTimeMillis());
+                PurchaseResult res = f.get(remaining, TimeUnit.MILLISECONDS);
                 if (res == PurchaseResult.SUCCESS) {
                     successCount++;
                 } else if (res == PurchaseResult.NOT_AVAILABLE) {
@@ -277,7 +344,50 @@ public class MarketPurchaseConcurrencyTest {
             assertEquals(5L, totalQuantity);
             assertEquals(5L, finalStock + totalQuantity, "Invariant holds under concurrent load");
         } finally {
-            executor.shutdownNow();
+            startGate.countDown();
+            for (Future<?> f : futures) {
+                if (!f.isDone()) f.cancel(true);
+            }
+            executor.shutdown();
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
         }
+    }
+
+    @Test
+    @DisplayName("B5. Outer Transaction Boundary: outer rollback reverts purchase despite inner SUCCESS")
+    void fixedService_outerTransactionRollback_rollsBackPurchase() {
+        String sku = "EMERALD_BLOCK";
+        seedStock(sku, 5L);
+
+        UUID purchaseId = UUID.randomUUID();
+        TransactionTemplate outerTemplate = new TransactionTemplate(transactionManager);
+        outerTemplate.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
+        outerTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+
+        class TestRollbackException extends RuntimeException {
+            TestRollbackException(String msg) { super(msg); }
+        }
+
+        assertThrows(TestRollbackException.class, () -> {
+            outerTemplate.execute(status -> {
+                PurchaseResult res = fixedService.purchase(purchaseId, sku, 2);
+                assertEquals(PurchaseResult.SUCCESS, res);
+
+                // Inside outer transaction, stock was decremented to 3
+                assertEquals(3L, getStock(sku));
+                assertEquals(1, getPurchaseCount(sku));
+
+                // Force outer rollback
+                throw new TestRollbackException("Simulated outer business failure");
+            });
+        });
+
+        // After outer transaction has rolled back:
+        // Verify on clean connection that purchase was reverted and stock was restored
+        assertEquals(5L, getStock(sku), "Stock must be restored to 5 after outer rollback");
+        assertEquals(0, getPurchaseCount(sku), "No purchase record must remain");
+        assertEquals(0L, getSumPurchasedQuantity(sku), "SUM(quantity) must be 0");
     }
 }
