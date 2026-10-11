@@ -31,7 +31,7 @@ public class PlayerKey {
     public String toString() {
         return "PlayerKey{" +
                 "playerId=" + playerId +
-                ", serverId='" + serverId + ''' +
+                ", serverId='" + serverId + '\'' +
                 '}';
     }
 }

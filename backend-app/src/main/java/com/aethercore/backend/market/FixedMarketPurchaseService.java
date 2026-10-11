@@ -70,7 +70,7 @@ public class FixedMarketPurchaseService {
         return transactionTemplate.execute(status -> {
             // Atomic conditional update: decreases available stock only if current available >= quantity
             int updated = jdbcTemplate.update(
-                    "UPDATE market_stock SET available = available - ? WHERE sku = ? AND available >= ?",
+                    "UPDATE market_stock SET available = available - ?, version = version + 1 WHERE sku = ? AND available >= ?",
                     (long) quantity,
                     sku,
                     (long) quantity

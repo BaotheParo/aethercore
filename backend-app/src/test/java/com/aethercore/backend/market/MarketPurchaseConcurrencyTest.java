@@ -110,6 +110,7 @@ public class MarketPurchaseConcurrencyTest {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             executor.shutdownNow();
+            throw new AssertionError("Cleanup interrupted while waiting for worker termination", e);
         }
     }
 
