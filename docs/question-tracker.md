@@ -27,3 +27,11 @@
 | **SB25** | Ranh giới của `@Transactional` | `AWAITING_CANDIDATE` | - | Đang chờ bạn trả lời | - | 16/10/2026 |
 | **SQL04** | `NULL`, `0`, chuỗi rỗng `""` và `= NULL` | `AWAITING_CANDIDATE` | - | Đang chờ bạn trả lời | - | 16/10/2026 |
 | **SQL53** (DB-07,29) | Transaction: `COMMIT`, `ROLLBACK`, `SAVEPOINT` | `AWAITING_CANDIDATE` | - | Đang chờ bạn trả lời | - | 16/10/2026 |
+| **J19** | `@FunctionalInterface` và biểu thức Lambda trong Java | `AWAITING_CANDIDATE` | - | Đã có thực nghiệm M1-E4 (`DamageStrategy`) | - | 13/10/2026 |
+| **SB06** | Ambiguous Bean Resolution & `NoUniqueBeanDefinitionException` | `AWAITING_CANDIDATE` | - | Đã có thực nghiệm M1-E4 (`DamageStrategyWiringTest`) | - | 15/10/2026 |
+| **J63** | Race condition; thao tác read/modify/write | `AWAITING_CANDIDATE` | - | Đã có mã nguồn M2-E1A (`BrokenMarketPurchaseService`) | - | 17/10/2026 |
+| **J64** | Thread safety và cách kiểm chứng harness đồng thời | `AWAITING_CANDIDATE` | - | Đã có mã nguồn M2-E1A (`MarketPurchaseConcurrencyTest`) | - | 17/10/2026 |
+| **J82** | `CountDownLatch`, `CyclicBarrier`, `Semaphore` | `AWAITING_CANDIDATE` | - | Đã áp dụng `CyclicBarrier` & `CountDownLatch` trong M2-E1A | - | 17/10/2026 |
+| **SQL54** | ACID và lỗi từng thuộc tính ngăn chặn | `AWAITING_CANDIDATE` | - | Đã có mã nguồn M2-E1A (Atomicity Rollback & Isolation) | - | 18/10/2026 |
+| **SQL55** | Hiện tượng Lost Update vs Dirty Read | `AWAITING_CANDIDATE` | - | Đã có mã nguồn M2-E1A tái hiện Lost Update | - | 18/10/2026 |
+| **SQL56** | Mức cô lập READ COMMITTED của PostgreSQL khi đồng thời | `AWAITING_CANDIDATE` | - | Đã có mã nguồn M2-E1A kiểm chứng WHERE re-evaluation | - | 18/10/2026 |

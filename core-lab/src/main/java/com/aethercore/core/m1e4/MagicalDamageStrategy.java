@@ -4,15 +4,15 @@ import com.aethercore.core.m1e3.CharacterStats;
 import java.util.Objects;
 
 /**
- * Magical Damage Strategy:
- * Formula: 3 * intelligence
- * Employs 64-bit long arithmetic to prevent integer overflow.
+ * Magical Damage Strategy (Prompt 05/06 Contract):
+ * Formula: 2 * intelligence + agility
+ * Promoted to 64-bit long arithmetic from the multiplication to prevent 32-bit integer overflow.
  */
 public class MagicalDamageStrategy implements DamageStrategy {
 
     @Override
     public long calculateDamage(CharacterStats stats) {
         Objects.requireNonNull(stats, "CharacterStats must not be null");
-        return 3L * stats.intelligence();
+        return 2L * stats.intelligence() + stats.agility();
     }
 }

@@ -1,7 +1,7 @@
 package com.aethercore.core.m1e4;
 
 /**
- * DispatchDemonstrator (M1-E4 Dispatch Lab Fixture):
+ * DispatchDemonstrator (M1-E4 Test Fixture):
  * Demonstrates the fundamental difference between:
  * 1. Static Overload Resolution (decided at compile-time based on static reference type).
  * 2. Dynamic Method Overriding (decided at runtime based on actual runtime instance type).

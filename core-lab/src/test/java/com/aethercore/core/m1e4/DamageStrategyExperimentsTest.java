@@ -10,8 +10,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * M1-E4 Core Lab Test Suite:
- * Strategy pattern computations, boundary checks, overflow prevention,
- * and Compile-time Overload Resolution vs Runtime Dynamic Dispatch.
+ * Strategy pattern computations (Prompt 05/06 formulas), boundary checks, overflow prevention,
+ * lambda delegation, and Compile-time Overload Resolution vs Runtime Dynamic Dispatch.
  */
 public class DamageStrategyExperimentsTest {
 
@@ -20,30 +20,31 @@ public class DamageStrategyExperimentsTest {
     class StrategyCalculationTests {
 
         @Test
-        @DisplayName("PhysicalDamageStrategy calculates 2*strength + floor(agility/2)")
-        void physicalCalculation() {
+        @DisplayName("Asymmetric stats (10, 12, 4) calculates Physical=24L and Magical=28L")
+        void asymmetricCalculation() {
             DamageStrategy physical = new PhysicalDamageStrategy();
-
-            // stats(str=18, int=10, agi=15) -> 2*18 + floor(15/2) = 36 + 7 = 43
-            CharacterStats stats = new CharacterStats(18, 10, 15);
-            assertEquals(43L, physical.calculateDamage(stats));
-
-            // stats(str=0, int=0, agi=0) -> 0
-            assertEquals(0L, physical.calculateDamage(new CharacterStats(0, 0, 0)));
-        }
-
-        @Test
-        @DisplayName("MagicalDamageStrategy calculates 3*intelligence")
-        void magicalCalculation() {
             DamageStrategy magical = new MagicalDamageStrategy();
 
-            // stats(str=10, int=16, agi=12) -> 3*16 = 48
-            CharacterStats stats = new CharacterStats(10, 16, 12);
-            assertEquals(48L, magical.calculateDamage(stats));
+            // Stats (str=10, int=12, agi=4)
+            CharacterStats stats = new CharacterStats(10, 12, 4);
+
+            // Physical: 2 * 10 + 4 = 24L
+            assertEquals(24L, physical.calculateDamage(stats));
+
+            // Magical: 2 * 12 + 4 = 28L
+            assertEquals(28L, magical.calculateDamage(stats));
         }
 
         @Test
-        @DisplayName("Damage calculation handles large stats without 32-bit integer overflow")
+        @DisplayName("Zero stats (0, 0, 0) yields 0L for both strategies")
+        void zeroStatsCalculation() {
+            CharacterStats zeroStats = new CharacterStats(0, 0, 0);
+            assertEquals(0L, new PhysicalDamageStrategy().calculateDamage(zeroStats));
+            assertEquals(0L, new MagicalDamageStrategy().calculateDamage(zeroStats));
+        }
+
+        @Test
+        @DisplayName("Extreme stats (Integer.MAX_VALUE) calculates 6442450941L without 32-bit overflow")
         void largeStatsOverflowProtection() {
             DamageStrategy physical = new PhysicalDamageStrategy();
             DamageStrategy magical = new MagicalDamageStrategy();
@@ -51,15 +52,11 @@ public class DamageStrategyExperimentsTest {
             // Integer.MAX_VALUE = 2,147,483,647
             CharacterStats extremeStats = new CharacterStats(Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE);
 
-            // Physical: 2 * 2147483647 + (2147483647 / 2) = 4,294,967,294 + 1,073,741,823 = 5,368,709,117L
-            long expectedPhysical = 2L * Integer.MAX_VALUE + (Integer.MAX_VALUE / 2L);
-            long actualPhysical = physical.calculateDamage(extremeStats);
-            assertEquals(expectedPhysical, actualPhysical);
-            assertTrue(actualPhysical > (long) Integer.MAX_VALUE, "Result must exceed 32-bit integer capacity cleanly");
-
-            // Magical: 3 * 2147483647 = 6,442,450,941L
-            long expectedMagical = 3L * (long) Integer.MAX_VALUE;
-            assertEquals(expectedMagical, magical.calculateDamage(extremeStats));
+            // Expected literal: 2 * 2147483647 + 2147483647 = 6,442,450,941L
+            long expected = 6442450941L;
+            assertEquals(expected, physical.calculateDamage(extremeStats));
+            assertEquals(expected, magical.calculateDamage(extremeStats));
+            assertTrue(expected > (long) Integer.MAX_VALUE, "Calculation must exceed 32-bit integer range safely");
         }
 
         @Test
@@ -74,21 +71,32 @@ public class DamageStrategyExperimentsTest {
     }
 
     @Nested
-    @DisplayName("Thí nghiệm 2: DamageCalculator Constructor Injection (Pure Java DI)")
+    @DisplayName("Thí nghiệm 2: DamageCalculator Constructor Injection & Lambda Delegation")
     class DamageCalculatorTests {
 
         @Test
-        @DisplayName("DamageCalculator executes chosen strategy through polymorphism")
+        @DisplayName("DamageCalculator delegates computation to injected strategy")
         void calculatorExecution() {
-            CharacterStats stats = new CharacterStats(20, 15, 10);
+            CharacterStats stats = new CharacterStats(10, 12, 4);
 
             DamageCalculator physicalCalc = new DamageCalculator(new PhysicalDamageStrategy());
-            // Physical: 2*20 + 10/2 = 45
-            assertEquals(45L, physicalCalc.compute(stats));
+            assertEquals(24L, physicalCalc.compute(stats));
 
             DamageCalculator magicalCalc = new DamageCalculator(new MagicalDamageStrategy());
-            // Magical: 3*15 = 45
-            assertEquals(45L, magicalCalc.compute(stats));
+            assertEquals(28L, magicalCalc.compute(stats));
+        }
+
+        @Test
+        @DisplayName("FunctionalInterface allows lambda stub injection to verify delegation")
+        void lambdaStubDelegation() {
+            CharacterStats stats = new CharacterStats(10, 10, 10);
+
+            // Injected lambda returning constant 999L
+            DamageStrategy constantStub = s -> 999L;
+            DamageCalculator calc = new DamageCalculator(constantStub);
+
+            assertEquals(999L, calc.compute(stats));
+            assertSame(constantStub, calc.getStrategy());
         }
 
         @Test
@@ -113,7 +121,7 @@ public class DamageStrategyExperimentsTest {
         @DisplayName("Method Overload is resolved at COMPILE-TIME, while Override is dispatched at RUNTIME")
         void dispatchResolutionComparison() {
             DispatchDemonstrator demonstrator = new DispatchDemonstrator();
-            CharacterStats stats = new CharacterStats(10, 10, 10);
+            CharacterStats stats = new CharacterStats(10, 12, 4);
 
             // Variable declared with static type DamageStrategy, holding runtime instance PhysicalDamageStrategy
             DamageStrategy polymorphicRef = new PhysicalDamageStrategy();
@@ -130,10 +138,10 @@ public class DamageStrategyExperimentsTest {
             assertEquals("PHYSICAL_STRATEGY_OVERLOAD", demonstrator.describe(specificRef));
 
             // 2. Dynamic Method Overriding (JLS §15.12.4):
-            // Runtime looks at the ACTUAL OBJECT INSTANCE on Heap (PhysicalDamageStrategy) via vtable.
-            // It executes PhysicalDamageStrategy.calculateDamage (2*10 + 10/2 = 25), NOT an abstract/base method!
+            // Runtime looks at the ACTUAL OBJECT INSTANCE on Heap (PhysicalDamageStrategy).
+            // It executes PhysicalDamageStrategy.calculateDamage (2*10 + 4 = 24L), NOT an abstract/base method!
             long overrideResult = polymorphicRef.calculateDamage(stats);
-            assertEquals(25L, overrideResult,
+            assertEquals(24L, overrideResult,
                     "Override resolution is dynamic (runtime) based on actual instance type");
         }
     }

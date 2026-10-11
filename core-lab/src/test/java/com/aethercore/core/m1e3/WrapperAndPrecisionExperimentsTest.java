@@ -40,9 +40,11 @@ public class WrapperAndPrecisionExperimentsTest {
             // Contract: Objects.equals must always be true for equal values (null-safe)
             assertTrue(Objects.equals(w1, w2), "Wrapper values are equal according to Objects.equals()");
 
-            // Observation on standard OpenJDK without custom -XX:AutoBoxCacheMax:
-            // w1 and w2 are distinct instances on Heap
-            assertFalse(w1 == w2, "Observation: Distinct wrapper instances outside cache are not == on standard JVM");
+            // Observation: On standard OpenJDK default settings, w1 and w2 are typically distinct instances on Heap.
+            // Note: We record identity comparison as an observation without asserting it must always be false across all JVM configurations.
+            boolean sameReference = (w1 == w2);
+            // Verify contract only: value equality holds regardless of whether reference identity is shared
+            assertEquals(w1, w2);
         }
 
         @Test
@@ -96,10 +98,12 @@ public class WrapperAndPrecisionExperimentsTest {
             // Contract check: Objects.equals is ALWAYS guaranteed true for equal values
             assertTrue(Objects.equals(out1, out2), "Objects.equals() is guaranteed true for equal values");
 
-            // Observation on standard OpenJDK without custom -XX:AutoBoxCacheMax:
-            // out1 and out2 are separate instances. Note: if -XX:AutoBoxCacheMax is >= 128, out1 == out2 could be true.
+            // Observation: Values outside [-128, 127] are not guaranteed cached by JLS §5.1.7.
+            // On standard OpenJDK default settings, 128 yields separate object references,
+            // but with JVM flag -XX:AutoBoxCacheMax=2048, 128 will share the same reference.
             boolean sameReference = (out1 == out2);
-            assertFalse(sameReference, "Observation: On standard JVM defaults, 128 yields separate object references");
+            // Contract asserts value equality, not physical memory allocation
+            assertEquals(out1, out2);
         }
     }
 
