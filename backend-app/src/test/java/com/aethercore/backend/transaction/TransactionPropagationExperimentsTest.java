@@ -1,6 +1,11 @@
 package com.aethercore.backend.transaction;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.AfterAll;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -68,7 +73,7 @@ public class TransactionPropagationExperimentsTest {
 
         registry.add("spring.aop.proxy-target-class", () -> "true");
         registry.add("spring.datasource.hikari.connection-timeout", () -> "5000");
-        // Minimum pool size >= 2 required to support REQUIRES_NEW connection suspension without deadlock
+        // Maximum pool capacity is 5: accommodates 2 concurrent connections for REQUIRES_NEW suspension plus observer margin
         registry.add("spring.datasource.hikari.maximum-pool-size", () -> "5");
         registry.add("spring.datasource.hikari.minimum-idle", () -> "1");
         registry.add("spring.datasource.hikari.auto-commit", () -> "true");
@@ -143,6 +148,19 @@ public class TransactionPropagationExperimentsTest {
         private Long capturedPid;
         private boolean capturedIsNew;
         private boolean capturedHasSavepoint;
+        private Boolean capturedAutoCommit;
+        private Boolean capturedTxActive;
+
+        public void resetCaptured() {
+            capturedPid = null;
+            capturedIsNew = false;
+            capturedHasSavepoint = false;
+            capturedAutoCommit = null;
+            capturedTxActive = null;
+        }
+
+        public Boolean getCapturedAutoCommit() { return capturedAutoCommit; }
+        public Boolean getCapturedTxActive() { return capturedTxActive; }
 
         public PropagationInnerService(JdbcTemplate jdbcTemplate) {
             this.jdbcTemplate = jdbcTemplate;
@@ -155,7 +173,9 @@ public class TransactionPropagationExperimentsTest {
         private void recordAndInsert(UUID id, String caseId) {
             capturedIsNew = TransactionAspectSupport.currentTransactionStatus().isNewTransaction();
             capturedHasSavepoint = TransactionAspectSupport.currentTransactionStatus().hasSavepoint();
+            capturedTxActive = TransactionSynchronizationManager.isActualTransactionActive();
             capturedPid = jdbcTemplate.execute((ConnectionCallback<Long>) con -> {
+                capturedAutoCommit = con.getAutoCommit();
                 try (Statement stmt = con.createStatement();
                      ResultSet rs = stmt.executeQuery("SELECT pg_backend_pid()")) {
                     rs.next();
@@ -349,41 +369,39 @@ public class TransactionPropagationExperimentsTest {
     @AfterAll
     static void exportObservations() {
         if (observations.isEmpty()) return;
-        File dir = new File("../docs").exists() ? new File("../docs/evidence/prompt12") : new File("docs/evidence/prompt12");
-        dir.mkdirs();
-        File file = new File(dir, "propagation-observations.json");
-        try (FileWriter fw = new FileWriter(file)) {
-            fw.write("{\n");
-            fw.write("  \"environment\": \"Spring Boot 3.3.4 / Spring Framework 6.1.13 / PostgreSQL 16.15\",\n");
-            fw.write("  \"timestamp\": \"" + Instant.now().toString() + "\",\n");
-            fw.write("  \"scenarios\": [\n");
-            List<String> keys = new ArrayList<>(observations.keySet());
-            Collections.sort(keys);
-            for (int i = 0; i < keys.size(); i++) {
-                PropagationObservation o = observations.get(keys.get(i));
-                fw.write("    {\n");
-                fw.write("      \"caseId\": \"" + o.caseId() + "\",\n");
-                fw.write("      \"innerPropagation\": \"" + o.innerPropagation() + "\",\n");
-                fw.write("      \"outerPid\": " + o.outerPid() + ",\n");
-                fw.write("      \"innerPid\": " + o.innerPid() + ",\n");
-                fw.write("      \"resumedOuterPid\": " + o.resumedOuterPid() + ",\n");
-                fw.write("      \"outerIsNew\": " + o.outerIsNew() + ",\n");
-                fw.write("      \"innerIsNew\": " + o.innerIsNew() + ",\n");
-                fw.write("      \"innerHasSavepoint\": " + o.innerHasSavepoint() + ",\n");
-                fw.write("      \"outerRollbackOnlyInCatch\": " + o.outerRollbackOnlyInCatch() + ",\n");
-                fw.write("      \"outerBodyReachedReturn\": " + o.outerBodyReachedReturn() + ",\n");
-                fw.write("      \"callerResult\": \"" + o.callerResult() + "\",\n");
-                fw.write("      \"exceptionClass\": " + (o.exceptionClass() == null ? "null" : "\"" + o.exceptionClass() + "\"") + ",\n");
-                fw.write("      \"preFailureInnerRows\": " + o.preFailureInnerRows() + ",\n");
-                fw.write("      \"preFailureOuterRows\": " + o.preFailureOuterRows() + ",\n");
-                fw.write("      \"finalOuterRows\": " + o.finalOuterRows() + ",\n");
-                fw.write("      \"finalInnerRows\": " + o.finalInnerRows() + "\n");
-                fw.write("    }" + (i < keys.size() - 1 ? "," : "") + "\n");
+        String evidenceDirProp = System.getProperty("lab.evidenceDir");
+        File dir;
+        if (evidenceDirProp != null && !evidenceDirProp.isBlank()) {
+            dir = new File(evidenceDirProp);
+        } else {
+            dir = new File("target/lab-evidence/ad-hoc");
+            if (!dir.exists() && new File("backend-app/target").exists()) {
+                dir = new File("backend-app/target/lab-evidence/ad-hoc");
             }
-            fw.write("  ]\n");
-            fw.write("}\n");
-        } catch (IOException e) {
-            e.printStackTrace();
+        }
+        dir.mkdirs();
+
+        File file = new File(dir, "propagation-observations.json");
+        String runId = System.getProperty("lab.runId", "ad-hoc-" + Instant.now().toEpochMilli());
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("runId", runId);
+        payload.put("environment", "Spring Boot 3.3.4 / Spring Framework 6.1.13 / PostgreSQL 16.15");
+        payload.put("timestamp", Instant.now().toString());
+
+        List<String> keys = new ArrayList<>(observations.keySet());
+        Collections.sort(keys);
+        List<PropagationObservation> scenarios = new ArrayList<>();
+        for (String k : keys) {
+            scenarios.add(observations.get(k));
+        }
+        payload.put("scenarios", scenarios);
+
+        try {
+            ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+            mapper.writeValue(file, payload);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to export propagation observations to " + file.getAbsolutePath(), e);
         }
     }
 

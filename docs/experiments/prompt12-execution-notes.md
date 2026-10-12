@@ -53,20 +53,18 @@ Reactor hoàn thành 100% không có lỗi:
 [INFO] Total tests run: 80, Failures: 0, Errors: 0, Skipped: 0
 ```
 
-- **Phân bổ Core Lab (34 tests):**
-  - `ConcurrencyProngOneTest`: 8 tests (CP1..CP8)
-  - `ConcurrencyProngTwoTest`: 13 tests (CP9..CP21)
-  - `ConcurrencyProngThreeTest`: 5 tests (CP22..CP26)
-  - `ConcurrencyProngFourTest`: 8 tests (CP27..CP34)
-- **Phân bổ Backend App (46 tests):**
-  - `LabEntryJpaRepositoryTest`: 3 tests
-  - `DamageCalculationStrategyTest`: 2 tests
-  - `MarketOptimisticLockServiceTest`: 6 tests
-  - `MarketPessimisticLockServiceTest`: 5 tests
-  - `JpaLifecycleLabTest`: 4 tests
-  - `JpaConflictAtCommitLabTest`: 6 tests
-  - `MarketLostUpdateExperimentsTest`: 6 tests
-  - `TransactionProxyExperimentsTest`: 8 tests (TX1..TX8) + 1 probe table test = 9 tests
+- **Phân bổ Core Lab (34 tests thực tế từ Surefire XML):**
+  - `PlayerKeyExperimentsTest` và nested (`VariantA`..`D`): 8 tests
+  - `WrapperAndPrecisionExperimentsTest` và nested: 13 tests
+  - `RecordExperimentsTest` và nested: 5 tests
+  - `DamageStrategyExperimentsTest` và nested: 8 tests
+- **Phân bổ Backend App (46 tests thực tế từ Surefire XML):**
+  - `LabEntryIntegrationTest`: 3 tests
+  - `DamageStrategyWiringTest`: 2 tests
+  - `MarketLockingConcurrencyTest`: 11 tests
+  - `MarketPurchaseConcurrencyTest`: 9 tests
+  - `JpaVersionExperimentsTest`: 6 tests
+  - `TransactionProxyExperimentsTest`: 9 tests (TX1..TX8 + AOP verification)
   - `TransactionPropagationExperimentsTest`: 6 tests (PR1..PR6)
 
 ### 2.2. Đo đạc Kịch bản Lan truyền Giao dịch (PR1 – PR6)

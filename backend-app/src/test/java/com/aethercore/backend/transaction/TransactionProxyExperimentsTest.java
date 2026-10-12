@@ -1,5 +1,8 @@
 package com.aethercore.backend.transaction;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -245,37 +248,47 @@ public class TransactionProxyExperimentsTest {
         ));
     }
 
+    @BeforeAll
+    static void initObservations() {
+        observations.clear();
+    }
+
     @AfterAll
     static void exportObservations() {
         if (observations.isEmpty()) return;
-        File dir = new File("../docs").exists() ? new File("../docs/evidence/prompt12") : new File("docs/evidence/prompt12");
-        dir.mkdirs();
-        File file = new File(dir, "proxy-observations.json");
-        try (FileWriter fw = new FileWriter(file)) {
-            fw.write("{\n");
-            fw.write("  \"environment\": \"Spring Boot 3.3.4 / Spring Framework 6.1.13 / PostgreSQL 16.15\",\n");
-            fw.write("  \"timestamp\": \"" + Instant.now().toString() + "\",\n");
-            fw.write("  \"scenarios\": [\n");
-            List<String> keys = new ArrayList<>(observations.keySet());
-            Collections.sort(keys);
-            for (int i = 0; i < keys.size(); i++) {
-                CaseObservation o = observations.get(keys.get(i));
-                fw.write("    {\n");
-                fw.write("      \"caseId\": \"" + o.caseId() + "\",\n");
-                fw.write("      \"description\": \"" + o.description() + "\",\n");
-                fw.write("      \"target\": \"" + o.target() + "\",\n");
-                fw.write("      \"invocationBoundary\": \"" + o.invocationBoundary() + "\",\n");
-                fw.write("      \"transactionActive\": " + o.transactionActive() + ",\n");
-                fw.write("      \"autoCommit\": " + o.autoCommit() + ",\n");
-                fw.write("      \"callerResult\": \"" + o.callerResult() + "\",\n");
-                fw.write("      \"exceptionThrown\": " + (o.exceptionThrown() == null ? "null" : "\"" + o.exceptionThrown() + "\"") + ",\n");
-                fw.write("      \"committedRows\": " + o.committedRows() + "\n");
-                fw.write("    }" + (i < keys.size() - 1 ? "," : "") + "\n");
+        String evidenceDirProp = System.getProperty("lab.evidenceDir");
+        File dir;
+        if (evidenceDirProp != null && !evidenceDirProp.isBlank()) {
+            dir = new File(evidenceDirProp);
+        } else {
+            dir = new File("target/lab-evidence/ad-hoc");
+            if (!dir.exists() && new File("backend-app/target").exists()) {
+                dir = new File("backend-app/target/lab-evidence/ad-hoc");
             }
-            fw.write("  ]\n");
-            fw.write("}\n");
-        } catch (IOException e) {
-            e.printStackTrace();
+        }
+        dir.mkdirs();
+
+        File file = new File(dir, "proxy-observations.json");
+        String runId = System.getProperty("lab.runId", "ad-hoc-" + Instant.now().toEpochMilli());
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("runId", runId);
+        payload.put("environment", "Spring Boot 3.3.4 / Spring Framework 6.1.13 / PostgreSQL 16.15");
+        payload.put("timestamp", Instant.now().toString());
+
+        List<String> keys = new ArrayList<>(observations.keySet());
+        Collections.sort(keys);
+        List<CaseObservation> scenarios = new ArrayList<>();
+        for (String k : keys) {
+            scenarios.add(observations.get(k));
+        }
+        payload.put("scenarios", scenarios);
+
+        try {
+            ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+            mapper.writeValue(file, payload);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to export proxy observations to " + file.getAbsolutePath(), e);
         }
     }
 

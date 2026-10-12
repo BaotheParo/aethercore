@@ -1,0 +1,86 @@
+{
+  "runId" : "prompt13-20261012-225832-6b3e0d",
+  "environment" : "Spring Boot 3.3.4 / Spring Framework 6.1.13 / PostgreSQL 16.15",
+  "timestamp" : "2026-10-12T15:59:02.524669400Z",
+  "scenarios" : [ {
+    "caseId" : "TX1",
+    "description" : "Outside bean calls annotated proxy method: successful write",
+    "target" : "ProbeWriter.successfulWrite",
+    "invocationBoundary" : "Spring AOP CglibAopProxy -> TransactionInterceptor",
+    "transactionActive" : true,
+    "autoCommit" : false,
+    "callerResult" : "SUCCESS",
+    "exceptionThrown" : null,
+    "committedRows" : 1
+  }, {
+    "caseId" : "TX2",
+    "description" : "Outside bean calls annotated proxy method: unhandled RuntimeException",
+    "target" : "ProbeWriter.runtimeFailureWrite",
+    "invocationBoundary" : "Spring AOP CglibAopProxy -> TransactionInterceptor",
+    "transactionActive" : true,
+    "autoCommit" : false,
+    "callerResult" : "EXCEPTION",
+    "exceptionThrown" : "java.lang.IllegalStateException",
+    "committedRows" : 0
+  }, {
+    "caseId" : "TX3",
+    "description" : "Self-invocation bypass: Non-annotated outer calls this.innerAnnotated()",
+    "target" : "ProbeOrchestrator.outerNonAnnotatedCallsSelf -> this.innerAnnotatedWrite",
+    "invocationBoundary" : "Direct 'this' heap call (Bypasses Spring AOP Proxy)",
+    "transactionActive" : false,
+    "autoCommit" : true,
+    "callerResult" : "EXCEPTION",
+    "exceptionThrown" : "java.lang.IllegalStateException",
+    "committedRows" : 1
+  }, {
+    "caseId" : "TX4",
+    "description" : "Cross-bean call from non-annotated outer to injected annotated bean",
+    "target" : "ProbeOrchestrator.outerNonAnnotatedCallsWriter -> probeWriter.runtimeFailureWrite",
+    "invocationBoundary" : "Injected Bean Spring AOP Proxy Interception",
+    "transactionActive" : true,
+    "autoCommit" : false,
+    "callerResult" : "EXCEPTION",
+    "exceptionThrown" : "java.lang.IllegalStateException",
+    "committedRows" : 0
+  }, {
+    "caseId" : "TX5",
+    "description" : "Checked exception with default @Transactional configuration",
+    "target" : "ProbeWriter.checkedFailureDefaultWrite",
+    "invocationBoundary" : "Spring AOP CglibAopProxy -> TransactionInterceptor",
+    "transactionActive" : true,
+    "autoCommit" : false,
+    "callerResult" : "EXCEPTION",
+    "exceptionThrown" : "com.aethercore.backend.transaction.TransactionProxyExperimentsTest$BusinessCheckedException",
+    "committedRows" : 1
+  }, {
+    "caseId" : "TX6",
+    "description" : "Checked exception with @Transactional(rollbackFor = BusinessCheckedException.class)",
+    "target" : "ProbeWriter.checkedFailureRollbackForWrite",
+    "invocationBoundary" : "Spring AOP CglibAopProxy -> TransactionInterceptor (rollbackFor matched)",
+    "transactionActive" : true,
+    "autoCommit" : false,
+    "callerResult" : "EXCEPTION",
+    "exceptionThrown" : "com.aethercore.backend.transaction.TransactionProxyExperimentsTest$BusinessCheckedException",
+    "committedRows" : 0
+  }, {
+    "caseId" : "TX7",
+    "description" : "In-method catch: RuntimeException swallowed inside method body",
+    "target" : "ProbeWriter.catchRuntimeInsideWrite",
+    "invocationBoundary" : "Spring AOP CglibAopProxy -> TransactionInterceptor (Normal return observed)",
+    "transactionActive" : true,
+    "autoCommit" : false,
+    "callerResult" : "SUCCESS",
+    "exceptionThrown" : null,
+    "committedRows" : 1
+  }, {
+    "caseId" : "TX8",
+    "description" : "Self-invocation inside annotated outer: Outer transaction remains active",
+    "target" : "ProbeOrchestrator.outerAnnotatedCallsSelf -> this.innerAnnotatedWrite",
+    "invocationBoundary" : "Outer Proxy Transaction intercepts propagating RuntimeException",
+    "transactionActive" : true,
+    "autoCommit" : false,
+    "callerResult" : "EXCEPTION",
+    "exceptionThrown" : "java.lang.IllegalStateException",
+    "committedRows" : 0
+  } ]
+}

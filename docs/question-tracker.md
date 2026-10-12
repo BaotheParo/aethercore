@@ -44,12 +44,14 @@
 | **SB51** | save(), flush() và saveAndFlush() khác nhau ra sao? Flush có đồng nghĩa commit không? | M2-E1C `JpaVersionExperimentsTest` (JPA-4: EntityManager flush/commit; chưa Spring Data repo) | PARTIAL | `VERIFIED` (Hibernate/JPA) | `AWAITING_CANDIDATE` | - |
 | **SB55** | Optimistic locking với @Version phát hiện xung đột như thế nào? | M2-E1C `JpaVersionExperimentsTest` (JPA-2 flush conflict, JPA-3 commit conflict, JPA-5 fresh retry) | FULL | `VERIFIED` (Hibernate/JPA) | `AWAITING_CANDIDATE` | - |
 | **SQL04** | `NULL`, `0`, chuỗi rỗng `""` và `= NULL` | Chuẩn bị cho các lab DB | NOT_STARTED | - | `AWAITING_CANDIDATE` | - |
-| **SQL53** (DB-07,29) | Transaction: `COMMIT`, `ROLLBACK`, `SAVEPOINT` | M2-E1A (Commit/Rollback) & M2-E3B `TransactionPropagationExperimentsTest` (PR5/PR6 Savepoint rollback/release) | FULL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
-| **SQL54** | ACID và lỗi từng thuộc tính ngăn chặn | M2-E1A (Atomicity Rollback & Read Committed) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **SQL53** (DB-07,29) | Transaction: `COMMIT`, `ROLLBACK`, `SAVEPOINT` | M2-E1A (Commit/Rollback), M2-E3B (PR5/PR6 Savepoints), M2-E2A (DL1 Victim atomicity rollback) | FULL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **SQL54** | ACID và lỗi từng thuộc tính ngăn chặn | M2-E1A (Rollback & Read Committed) & M2-E2A (Atomicity: marker và UPDATE trước lỗi của victim cũng mất hoàn toàn khi deadlock) | FULL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
 | **SQL55** | Hiện tượng Lost Update vs Dirty Read | M2-E1A Tái hiện Lost Update thành công trên PostgreSQL 16 | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
 | **SQL56** | Mức cô lập READ COMMITTED của PostgreSQL khi đồng thời | M2-E1A Atomic conditional update & WHERE re-evaluation | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
 | **SQL57** | Khi nào chọn optimistic locking với version, khi nào cần pessimistic locking? | M2-E1B & M2-E1C Phân tích cơ chế và trade-offs (chưa benchmark hiệu năng cao) | PARTIAL | `VERIFIED` (PostgreSQL 16 & Hibernate) | `AWAITING_CANDIDATE` | - |
-| **SQL58** | SELECT ... FOR UPDATE khóa dữ liệu để làm gì? Giữ transaction mở lâu sẽ gây tác hại gì? | M2-E1B `MarketLockingConcurrencyTest` (C4 pg_blocking_pids quan sát khóa hàng PostgreSQL) | FULL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **SQL58** | SELECT ... FOR UPDATE khóa dữ liệu để làm gì? Giữ transaction mở lâu sẽ gây tác hại gì? | M2-E1B C4 & M2-E2A DL2 (pg_blocking_pids quan sát tiến trình bị chặn khi giữ transaction mở) | FULL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **SQL59** | Deadlock khi cập nhật lấy khóa khác thứ tự (Lock Ordering) | M2-E2A `PostgresDeadlockExperimentsTest` (DL1 chu trình 2 hàng ngược thứ tự, DL2 chuẩn hóa thứ tự [1,2]; cơ chế nền tảng, chưa batch/upsert) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **SQL60** | Retry câu SQL hay toàn bộ transaction sau khi thành victim deadlock? | M2-E2A `PostgresDeadlockExperimentsTest` (DL3 chứng minh aborted state 40P01 bắt buộc retry toàn bộ transaction với fresh txid_current) | FULL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
 
 ---
 
