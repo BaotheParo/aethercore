@@ -73,3 +73,9 @@ mvn clean test
 - `AetherCore :: Core Lab`: **34 tests PASS** (0 failures, 0 errors, 0 skipped)
 - `AetherCore :: Backend App`: **40 tests PASS** (0 failures, 0 errors, 0 skipped)
 - **Tổng cộng Reactor:** **74 tests PASS 100%**, không có bất kỳ regression nào.
+---
+
+## ĐÍNH CHÍNH PHÂN BỔ TEST XML VÀ DAMAGE STRATEGY WIRING (PROMPT 12)
+> **Ghi chú đối chiếu Surefire XML thực tế:**
+> - Module `core-lab` (34 tests): `PlayerKeyExperimentsTest` (8 tests), `WrapperAndPrecisionExperimentsTest` (13 tests: gồm 8 phương thức test và các invocation tham số hóa), `RecordExperimentsTest` (5 tests), `DamageStrategyExperimentsTest` (8 tests). Tổng: 34 tests.
+> - Module `backend-app` (40 tests): `LabEntryIntegrationTest` (3 tests), `DamageStrategyWiringTest` (2 tests) (không gộp thành LabEntry = 5), `MarketLockingConcurrencyTest` (11 tests), `MarketPurchaseConcurrencyTest` (9 tests), `JpaVersionExperimentsTest` (6 tests), `TransactionProxyExperimentsTest` (9 tests). Tổng: 40 tests.

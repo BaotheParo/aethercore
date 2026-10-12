@@ -59,9 +59,11 @@ public class QuestRewardService {
    **Mã nguồn tái cấu trúc của bạn:**
    `[AWAITING_CANDIDATE]`
 
-4. **Xử lý Checked Exception với `rollbackFor`:**
-   Nếu `QuestVerificationException` là một Checked Exception (kế thừa `Exception`), cần cấu hình `@Transactional` như thế nào để đảm bảo khi exception này được ném ra, toàn bộ giao dịch bắt buộc phải rollback?
-   **Mã nguồn cấu hình của bạn:**
+4. **Xử lý Checked Exception với `rollbackFor` & Ranh giới Transaction:**
+   - Phân biệt giữa việc "gọi method writer qua proxy" với "transaction bao quanh toàn bộ ranh giới claimReward".
+   - Nếu `QuestVerificationException` là một Checked Exception ném ra tại `claimReward` sau khi writer đã hoàn tất: Method nào bắt buộc phải mang `@Transactional(rollbackFor = QuestVerificationException.class)`?
+   - Lưu ý quan trọng: Thêm `rollbackFor` vào một method writer độc lập đã return và commit thành công trước đó có thể hồi tố hủy commit đó không? Vì sao?
+   **Câu trả lời và Mã nguồn cấu hình của bạn:**
    `[AWAITING_CANDIDATE]`
 
 5. **Viết Unit/Integration Test Assertions:**

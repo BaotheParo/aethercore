@@ -64,7 +64,7 @@ Toàn bộ 8 kịch bản được chạy thực tế trên container PostgreSQL
 | **TX3** | Caller gọi outer không annotated; outer gọi `this.innerAnnotated()`, ném `RuntimeException` | `false` | `true` | `IllegalStateException` | **1** | **Self-invocation bypass proxy:** Lời gọi `this.` đi thẳng trên heap, không qua proxy. Không có Spring TX, `autoCommit=true` tự commit INSERT vào DB! |
 | **TX4** | Caller gọi outer không annotated; outer gọi method annotated của bean khác được inject | `true` (trong writer) | `false` | `IllegalStateException` | **0** | Lời gọi cross-bean đi qua Proxy của bean được inject $
 ightarrow$ Proxy can thiệp và rollback thành công. |
-| **TX5** | Caller gọi method annotated qua proxy, ném checked `BusinessCheckedException` | `true` | `false` | `BusinessCheckedException` | **1** | **Default Rollback Rule:** Mặc định Spring chỉ rollback với `RuntimeException` và `Error`. Checked exception được xem là tín hiệu nghiệp vụ và được **COMMIT**! |
+| **TX5** | Caller gọi method annotated qua proxy, ném checked `BusinessCheckedException` | `true` | `false` | `BusinessCheckedException` | **1** | **Default Rollback Rule:** Mặc định Spring chỉ rollback với `RuntimeException` và `Error`. Checked exception được xem là tín hiệu nghiệp vụ và được **COMMIT theo mặc định trong điều kiện của TX5** (lưu ý: việc Spring commit không chứng minh dữ liệu này hợp lệ về mặt nghiệp vụ)! |
 | **TX6** | Caller gọi method với `@Transactional(rollbackFor = BusinessCheckedException.class)` | `true` | `false` | `BusinessCheckedException` | **0** | Thuộc tính `rollbackFor` ghi đè quy tắc mặc định, ép `TransactionInterceptor` rollback với checked exception này. |
 | **TX7** | Method annotated thực hiện INSERT, ném `RuntimeException` nhưng `catch` ngay trong body | `true` | `false` | Thành công | **1** | Exception bị nuốt cục bộ, không thoát ra khỏi method boundary $
 ightarrow$ Interceptor thấy return bình thường và tiến hành commit. |
@@ -86,7 +86,7 @@ ightarrow$ Lệnh INSERT chạy với `autoCommit = true` trên connection raw. 
 ightarrow$ Proxy đã mở transaction ngay từ đầu. Khi outer gọi `this.innerAnnotated()`, advice của inner quả thực bị bỏ qua, nhưng connection và thread vẫn đang bị ràng buộc bởi transaction của outer (`isActualTransactionActive() == true`). Khi exception ném ra thoát khỏi outer, outer interceptor lập tức rollback toàn bộ!
 
 ### 4.2. TX5 vs TX6: Cơ chế Rollback mặc định và `rollbackFor`
-- Theo Spring Framework specification (JLS/Spring Architecture):
+- Theo quy tắc mặc định của Spring Framework (được hiện thực trong DefaultTransactionAttribute, không phải quy định của ngôn ngữ Java JLS):
   - `RuntimeException` và `Error` đại diện cho lỗi hệ thống không thể lường trước (Unchecked) $
 ightarrow$ Mặc định kích hoạt Rollback.
   - `Exception` (Checked exception) trong thiết kế Java ban đầu được dùng cho các tình huống dự kiến có thể phục hồi (ví dụ: `InsufficientFundsException`) $
@@ -94,7 +94,7 @@ ightarrow$ Mặc định Spring coi đây là luồng nghiệp vụ hợp lệ v
 - Trong thực tế, nếu không khai báo `rollbackFor = BusinessException.class` (hoặc `rollbackFor = Exception.class`), lập trình viên có thể vô tình commit các trạng thái hỏng khi ném checked exception.
 
 ### 4.3. TX7: Rủi ro khi Try-Catch bên trong `@Transactional`
-- `TransactionInterceptor` chỉ can thiệp khi exception thoát ra khỏi phương thức (uncaught exception escaping invocation boundary).
+- `TransactionInterceptor` can thiệp trên cả hai nhánh: xử lý commit khi phương thức trả về bình thường (commitTransactionAfterReturning) và xử lý rollback khi exception thoát ra khỏi phương thức (completeTransactionAfterThrowing). Trong TX7, exception thuần Java được bắt và xử lý hoàn toàn bên trong cùng method body (chưa có interceptor inner nào đánh dấu rollback-only và chưa có lỗi SQL làm hỏng DB connection), do đó interceptor chỉ quan sát thấy nhánh return bình thường và tiến hành commit.
 - Nếu code nghiệp vụ dùng `try-catch` và nuốt exception (swallow) mà không ném lại hoặc không gọi `TransactionAspectSupport.currentTransactionStatus().setRollbackOnly()`, Spring sẽ hoàn toàn không biết có lỗi và commit dữ liệu như bình thường.
 
 ---

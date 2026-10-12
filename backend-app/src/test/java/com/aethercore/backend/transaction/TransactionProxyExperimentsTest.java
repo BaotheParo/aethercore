@@ -1,5 +1,7 @@
 package com.aethercore.backend.transaction;
 
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,15 +21,20 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.sql.PreparedStatement;
-import java.util.Map;
-import java.util.UUID;
+import java.time.Instant;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * M2-E3A: Declarative Transaction Management with Spring @Transactional and AOP Proxy Semantics.
+ *
+ * Uses isolated test-only table 'tx_probe' to avoid coupling with business domain entities.
  *
  * Verifies:
  * - AOP Proxy invocation boundaries and interception mechanisms.
@@ -56,9 +63,11 @@ public class TransactionProxyExperimentsTest {
         registry.add("spring.datasource.driver-class-name", () -> "org.postgresql.Driver");
         registry.add("spring.sql.init.mode", () -> "always");
 
+        registry.add("spring.aop.proxy-target-class", () -> "true");
         registry.add("spring.datasource.hikari.connection-timeout", () -> "5000");
-        registry.add("spring.datasource.hikari.maximum-pool-size", () -> "10");
-        registry.add("spring.datasource.hikari.minimum-idle", () -> "4");
+        registry.add("spring.datasource.hikari.maximum-pool-size", () -> "3");
+        registry.add("spring.datasource.hikari.minimum-idle", () -> "0");
+        registry.add("spring.datasource.hikari.auto-commit", () -> "true");
     }
 
     @Autowired
@@ -70,9 +79,21 @@ public class TransactionProxyExperimentsTest {
     @Autowired
     private ProbeOrchestrator probeOrchestrator;
 
-    private static final Map<String, InsertObservation> observations = new ConcurrentHashMap<>();
+    private static final Map<String, CaseObservation> observations = new ConcurrentHashMap<>();
 
     record InsertObservation(boolean transactionActive, boolean autoCommit) {}
+
+    record CaseObservation(
+            String caseId,
+            String description,
+            String target,
+            String invocationBoundary,
+            boolean transactionActive,
+            boolean autoCommit,
+            String callerResult,
+            String exceptionThrown,
+            int committedRows
+    ) {}
 
     public static class BusinessCheckedException extends Exception {
         public BusinessCheckedException(String message) {
@@ -80,7 +101,7 @@ public class TransactionProxyExperimentsTest {
         }
     }
 
-    @TestConfiguration
+    @TestConfiguration(proxyBeanMethods = false)
     static class TestProbeConfiguration {
 
         @Bean
@@ -100,18 +121,23 @@ public class TransactionProxyExperimentsTest {
      */
     public static class ProbeWriter {
         private final JdbcTemplate jdbcTemplate;
+        private final Map<String, InsertObservation> insertObs = new ConcurrentHashMap<>();
 
         public ProbeWriter(JdbcTemplate jdbcTemplate) {
             this.jdbcTemplate = jdbcTemplate;
+        }
+
+        InsertObservation getInsertObservation(String caseId) {
+            return insertObs.get(caseId);
         }
 
         void doInsertAndObserve(String caseId, UUID id, String marker) {
             jdbcTemplate.execute((ConnectionCallback<Void>) con -> {
                 boolean txActive = TransactionSynchronizationManager.isActualTransactionActive();
                 boolean autoCommit = con.getAutoCommit();
-                observations.put(caseId, new InsertObservation(txActive, autoCommit));
+                insertObs.put(caseId, new InsertObservation(txActive, autoCommit));
 
-                String sql = "INSERT INTO market_purchase (id, sku, quantity, created_at) VALUES (?, ?, 1, NOW())";
+                String sql = "INSERT INTO tx_probe (id, case_id, phase) VALUES (?, ?, 'SINGLE')";
                 try (PreparedStatement ps = con.prepareStatement(sql)) {
                     ps.setObject(1, id);
                     ps.setString(2, marker);
@@ -190,22 +216,67 @@ public class TransactionProxyExperimentsTest {
 
     @BeforeEach
     void setUp() {
-        observations.clear();
-        jdbcTemplate.update("DELETE FROM market_purchase");
-        jdbcTemplate.update("DELETE FROM market_stock");
-        // Seed SKUs used by the probe markers so foreign key REFERENCES market_stock(sku) is satisfied
-        for (String sku : java.util.List.of("TX1_MARKER", "TX2_MARKER", "TX3_MARKER", "TX4_MARKER", "TX5_MARKER", "TX6_MARKER", "TX7_MARKER", "TX8_MARKER")) {
-            jdbcTemplate.update("INSERT INTO market_stock (sku, available, version) VALUES (?, 100, 0)", sku);
-        }
+        assertFalse(TransactionSynchronizationManager.isActualTransactionActive(),
+                "Test thread must NOT have active Spring transaction before test execution");
+        jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS tx_probe (id UUID PRIMARY KEY, case_id VARCHAR(40) NOT NULL, phase VARCHAR(20) NOT NULL)");
+        jdbcTemplate.update("DELETE FROM tx_probe");
+    }
+
+    @AfterEach
+    void tearDown() {
+        assertFalse(TransactionSynchronizationManager.isActualTransactionActive(),
+                "Test thread must NOT have active Spring transaction after test execution");
     }
 
     private int getCommittedRowCount(UUID id) {
         Integer val = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM market_purchase WHERE id = ?",
+                "SELECT COUNT(*) FROM tx_probe WHERE id = ?",
                 Integer.class,
                 id
         );
         return val != null ? val : 0;
+    }
+
+    private void recordCase(String caseId, String desc, String target, String boundary,
+                            boolean txActive, boolean autoCommit, String callerResult,
+                            String exThrown, int committed) {
+        observations.put(caseId, new CaseObservation(
+                caseId, desc, target, boundary, txActive, autoCommit, callerResult, exThrown, committed
+        ));
+    }
+
+    @AfterAll
+    static void exportObservations() {
+        if (observations.isEmpty()) return;
+        File dir = new File("../docs").exists() ? new File("../docs/evidence/prompt12") : new File("docs/evidence/prompt12");
+        dir.mkdirs();
+        File file = new File(dir, "proxy-observations.json");
+        try (FileWriter fw = new FileWriter(file)) {
+            fw.write("{\n");
+            fw.write("  \"environment\": \"Spring Boot 3.3.4 / Spring Framework 6.1.13 / PostgreSQL 16.15\",\n");
+            fw.write("  \"timestamp\": \"" + Instant.now().toString() + "\",\n");
+            fw.write("  \"scenarios\": [\n");
+            List<String> keys = new ArrayList<>(observations.keySet());
+            Collections.sort(keys);
+            for (int i = 0; i < keys.size(); i++) {
+                CaseObservation o = observations.get(keys.get(i));
+                fw.write("    {\n");
+                fw.write("      \"caseId\": \"" + o.caseId() + "\",\n");
+                fw.write("      \"description\": \"" + o.description() + "\",\n");
+                fw.write("      \"target\": \"" + o.target() + "\",\n");
+                fw.write("      \"invocationBoundary\": \"" + o.invocationBoundary() + "\",\n");
+                fw.write("      \"transactionActive\": " + o.transactionActive() + ",\n");
+                fw.write("      \"autoCommit\": " + o.autoCommit() + ",\n");
+                fw.write("      \"callerResult\": \"" + o.callerResult() + "\",\n");
+                fw.write("      \"exceptionThrown\": " + (o.exceptionThrown() == null ? "null" : "\"" + o.exceptionThrown() + "\"") + ",\n");
+                fw.write("      \"committedRows\": " + o.committedRows() + "\n");
+                fw.write("    }" + (i < keys.size() - 1 ? "," : "") + "\n");
+            }
+            fw.write("  ]\n");
+            fw.write("}\n");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     @Test
@@ -223,12 +294,17 @@ public class TransactionProxyExperimentsTest {
         UUID id = UUID.randomUUID();
         probeWriter.successfulWrite(id, "TX1_MARKER");
 
-        InsertObservation obs = observations.get("TX1");
+        InsertObservation obs = probeWriter.getInsertObservation("TX1");
         assertNotNull(obs, "Observation for TX1 must be recorded");
         assertTrue(obs.transactionActive(), "Spring transaction must be active during INSERT");
         assertFalse(obs.autoCommit(), "Auto-commit must be disabled by Spring transaction manager");
 
-        assertEquals(1, getCommittedRowCount(id), "1 row must be committed to database");
+        int committed = getCommittedRowCount(id);
+        assertEquals(1, committed, "1 row must be committed to database");
+
+        recordCase("TX1", "Outside bean calls annotated proxy method: successful write",
+                "ProbeWriter.successfulWrite", "Spring AOP CglibAopProxy -> TransactionInterceptor",
+                obs.transactionActive(), obs.autoCommit(), "SUCCESS", null, committed);
     }
 
     @Test
@@ -242,12 +318,17 @@ public class TransactionProxyExperimentsTest {
         );
         assertTrue(ex.getMessage().contains("TX2"));
 
-        InsertObservation obs = observations.get("TX2");
+        InsertObservation obs = probeWriter.getInsertObservation("TX2");
         assertNotNull(obs, "Observation for TX2 must be recorded");
         assertTrue(obs.transactionActive(), "Spring transaction must be active during INSERT");
         assertFalse(obs.autoCommit(), "Auto-commit must be disabled by Spring transaction manager");
 
-        assertEquals(0, getCommittedRowCount(id), "0 rows must be committed; unhandled RuntimeException rolls back");
+        int committed = getCommittedRowCount(id);
+        assertEquals(0, committed, "0 rows must be committed; unhandled RuntimeException rolls back");
+
+        recordCase("TX2", "Outside bean calls annotated proxy method: unhandled RuntimeException",
+                "ProbeWriter.runtimeFailureWrite", "Spring AOP CglibAopProxy -> TransactionInterceptor",
+                obs.transactionActive(), obs.autoCommit(), "EXCEPTION", ex.getClass().getName(), committed);
     }
 
     @Test
@@ -261,12 +342,18 @@ public class TransactionProxyExperimentsTest {
         );
         assertTrue(ex.getMessage().contains("TX3"));
 
-        InsertObservation obs = observations.get("TX3");
+        InsertObservation obs = probeWriter.getInsertObservation("TX3");
         assertNotNull(obs, "Observation for TX3 must be recorded");
         assertFalse(obs.transactionActive(), "Spring transaction must NOT be active (self-invocation bypasses proxy advice)");
         assertTrue(obs.autoCommit(), "Auto-commit must remain enabled on raw connection without Spring transaction");
 
-        assertEquals(1, getCommittedRowCount(id), "1 row committed: statement auto-committed because proxy advice was bypassed");
+        int committed = getCommittedRowCount(id);
+        assertEquals(1, committed, "1 row committed: statement auto-committed because proxy advice was bypassed");
+
+        recordCase("TX3", "Self-invocation bypass: Non-annotated outer calls this.innerAnnotated()",
+                "ProbeOrchestrator.outerNonAnnotatedCallsSelf -> this.innerAnnotatedWrite",
+                "Direct 'this' heap call (Bypasses Spring AOP Proxy)",
+                obs.transactionActive(), obs.autoCommit(), "EXCEPTION", ex.getClass().getName(), committed);
     }
 
     @Test
@@ -280,12 +367,18 @@ public class TransactionProxyExperimentsTest {
         );
         assertTrue(ex.getMessage().contains("TX4"));
 
-        InsertObservation obs = observations.get("TX4");
+        InsertObservation obs = probeWriter.getInsertObservation("TX4");
         assertNotNull(obs, "Observation for TX4 must be recorded");
         assertTrue(obs.transactionActive(), "Spring transaction must be active in writer bean");
-        assertFalse(obs.autoCommit(), "Auto-commit must be disabled by writer\'s Spring transaction");
+        assertFalse(obs.autoCommit(), "Auto-commit must be disabled by writer's Spring transaction");
 
-        assertEquals(0, getCommittedRowCount(id), "0 rows committed: injected bean proxy intercepted the call and rolled back");
+        int committed = getCommittedRowCount(id);
+        assertEquals(0, committed, "0 rows committed: injected bean proxy intercepted the call and rolled back");
+
+        recordCase("TX4", "Cross-bean call from non-annotated outer to injected annotated bean",
+                "ProbeOrchestrator.outerNonAnnotatedCallsWriter -> probeWriter.runtimeFailureWrite",
+                "Injected Bean Spring AOP Proxy Interception",
+                obs.transactionActive(), obs.autoCommit(), "EXCEPTION", ex.getClass().getName(), committed);
     }
 
     @Test
@@ -299,12 +392,17 @@ public class TransactionProxyExperimentsTest {
         );
         assertTrue(ex.getMessage().contains("TX5"));
 
-        InsertObservation obs = observations.get("TX5");
+        InsertObservation obs = probeWriter.getInsertObservation("TX5");
         assertNotNull(obs, "Observation for TX5 must be recorded");
         assertTrue(obs.transactionActive(), "Spring transaction must be active during INSERT");
         assertFalse(obs.autoCommit(), "Auto-commit must be disabled by Spring transaction manager");
 
-        assertEquals(1, getCommittedRowCount(id), "1 row committed: Spring default rollback rule only covers unchecked exceptions");
+        int committed = getCommittedRowCount(id);
+        assertEquals(1, committed, "1 row committed: Spring default rollback rule only covers unchecked exceptions");
+
+        recordCase("TX5", "Checked exception with default @Transactional configuration",
+                "ProbeWriter.checkedFailureDefaultWrite", "Spring AOP CglibAopProxy -> TransactionInterceptor",
+                obs.transactionActive(), obs.autoCommit(), "EXCEPTION", ex.getClass().getName(), committed);
     }
 
     @Test
@@ -318,12 +416,18 @@ public class TransactionProxyExperimentsTest {
         );
         assertTrue(ex.getMessage().contains("TX6"));
 
-        InsertObservation obs = observations.get("TX6");
+        InsertObservation obs = probeWriter.getInsertObservation("TX6");
         assertNotNull(obs, "Observation for TX6 must be recorded");
         assertTrue(obs.transactionActive(), "Spring transaction must be active during INSERT");
         assertFalse(obs.autoCommit(), "Auto-commit must be disabled by Spring transaction manager");
 
-        assertEquals(0, getCommittedRowCount(id), "0 rows committed: rollbackFor explicitly configured for BusinessCheckedException");
+        int committed = getCommittedRowCount(id);
+        assertEquals(0, committed, "0 rows committed: rollbackFor explicitly configured for BusinessCheckedException");
+
+        recordCase("TX6", "Checked exception with @Transactional(rollbackFor = BusinessCheckedException.class)",
+                "ProbeWriter.checkedFailureRollbackForWrite",
+                "Spring AOP CglibAopProxy -> TransactionInterceptor (rollbackFor matched)",
+                obs.transactionActive(), obs.autoCommit(), "EXCEPTION", ex.getClass().getName(), committed);
     }
 
     @Test
@@ -333,12 +437,18 @@ public class TransactionProxyExperimentsTest {
         String result = probeWriter.catchRuntimeInsideWrite(id, "TX7_MARKER");
         assertEquals("CAUGHT_LOCALLY", result);
 
-        InsertObservation obs = observations.get("TX7");
+        InsertObservation obs = probeWriter.getInsertObservation("TX7");
         assertNotNull(obs, "Observation for TX7 must be recorded");
         assertTrue(obs.transactionActive(), "Spring transaction must be active during INSERT");
         assertFalse(obs.autoCommit(), "Auto-commit must be disabled by Spring transaction manager");
 
-        assertEquals(1, getCommittedRowCount(id), "1 row committed: exception caught locally did not escape method boundary");
+        int committed = getCommittedRowCount(id);
+        assertEquals(1, committed, "1 row committed: exception caught locally did not escape method boundary");
+
+        recordCase("TX7", "In-method catch: RuntimeException swallowed inside method body",
+                "ProbeWriter.catchRuntimeInsideWrite",
+                "Spring AOP CglibAopProxy -> TransactionInterceptor (Normal return observed)",
+                obs.transactionActive(), obs.autoCommit(), "SUCCESS", null, committed);
     }
 
     @Test
@@ -352,11 +462,17 @@ public class TransactionProxyExperimentsTest {
         );
         assertTrue(ex.getMessage().contains("TX8"));
 
-        InsertObservation obs = observations.get("TX8");
+        InsertObservation obs = probeWriter.getInsertObservation("TX8");
         assertNotNull(obs, "Observation for TX8 must be recorded");
         assertTrue(obs.transactionActive(), "Spring transaction must be active (inherited from outer transactional method)");
         assertFalse(obs.autoCommit(), "Auto-commit must be disabled by outer Spring transaction");
 
-        assertEquals(0, getCommittedRowCount(id), "0 rows committed: outer transaction intercepted the exception and rolled back");
+        int committed = getCommittedRowCount(id);
+        assertEquals(0, committed, "0 rows committed: outer transaction intercepted the exception and rolled back");
+
+        recordCase("TX8", "Self-invocation inside annotated outer: Outer transaction remains active",
+                "ProbeOrchestrator.outerAnnotatedCallsSelf -> this.innerAnnotatedWrite",
+                "Outer Proxy Transaction intercepts propagating RuntimeException",
+                obs.transactionActive(), obs.autoCommit(), "EXCEPTION", ex.getClass().getName(), committed);
     }
 }
