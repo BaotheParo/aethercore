@@ -33,8 +33,9 @@ import java.util.UUID;
  *   <li><b>When caller has an active transaction:</b> The service participates in the caller's
  *       existing transaction. Returning {@link PurchaseResult#SUCCESS} indicates that the row lock,
  *       decrement, and purchase insert succeeded within the current transaction context. However,
- *       if the outer transaction subsequently encounters an error and rolls back, this purchase
- *       and row lock release will also be rolled back as part of the outer transaction boundary.</li>
+ *       if the outer transaction subsequently encounters an error and rolls back, the data modifications
+ *       will be rolled back, and the exclusive row lock remains held until the outer transaction boundary
+ *       completes (commits or rolls back).</li>
  *   <li><b>Isolation:</b> Configured with {@code ISOLATION_READ_COMMITTED}.</li>
  * </ul>
  */

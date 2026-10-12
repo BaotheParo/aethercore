@@ -1,7 +1,7 @@
 # AETHERCORE — PROMPT 10 EXECUTION NOTES & VERIFICATION LOG
 
-**Ngày thực thi:** 12/10/2026 (Prompt 10)  
-**Mục tiêu:** 
+**Ngày thực thi:** 12/10/2026 (Prompt 10)
+**Mục tiêu:**
 1. Khớp lại M2-E1B (JDBC lab): loại bỏ retry khỏi production service, điều phối xung đột qua purchase() thật và snapshot thật, kiểm tra typed `pg_blocking_pids()`, bổ sung mixed-writer test chứng minh version increment.
 2. Triển khai M2-E1C (JPA lab): bootstrap Java SE JPA / Hibernate 6.5 test-only, kiểm chứng `@Version`, persistence context, dirty checking, sự khác biệt giữa `flush()` và `commit()`, rollback atomicity và fresh retry.
 **Trạng thái toàn bộ Reactor:** `BUILD SUCCESS` — 65/65 tests PASS (100%) trên PostgreSQL 16.15 thật qua Testcontainers 1.21.4.
@@ -98,3 +98,16 @@
   - `LabEntryIntegrationTest`: 3 tests PASS
   - `DamageStrategyWiringTest`: 2 tests PASS
 - **Tổng cộng:** **65 tests PASS, 0 failure, 0 error, 0 skipped**.
+
+---
+
+## ĐÍNH CHÍNH EVIDENCE VÀ TÊN LỚP TEST LỊCH SỬ (PROMPT 10)
+> **Ghi chú đính chính kỹ thuật:**
+> Trong file `docs/evidence/prompt10/test-summary.txt`, danh mục các lớp test thuộc module `core-lab` đã có sự sai lệch về tên gọi (liệt kê nhầm thành `PlayerKeyWrapperTest`, `PlayerKeyRecordTest`, `BigDecimalExperimentsTest`, `DamageStrategyDispatchTest`).
+> Danh mục 4 lớp test thực tế trong mã nguồn `core-lab` gồm:
+> 1. `PlayerKeyExperimentsTest` (8 tests)
+> 2. `WrapperAndPrecisionExperimentsTest` (8 tests)
+> 3. `RecordExperimentsTest` (7 tests)
+> 4. `DamageStrategyExperimentsTest` (11 tests)
+> Tổng cộng: 34 tests trong `core-lab`.
+> Bản tổng hợp lịch sử cũ được ghi nhận là summary có sai lệch về tên gọi, không làm mất tính toàn vẹn của kết quả chạy thực tế (34/34 PASS). Từ Prompt 11, toàn bộ tên lớp và số lượng kiểm thử được trích xuất tự động từ Surefire XML kết quả chạy thật.

@@ -193,17 +193,27 @@ public class JpaVersionExperimentsTest {
         assertEquals(1, getPurchaseCount(sku));
         assertEquals(2L, getSumPurchasedQuantity(sku));
 
-        // Verify generated SQL via StatementInspector
+        // Verify generated SQL via StatementInspector: assert version in SET, version predicate in WHERE, and sku in WHERE
         List<String> sqls = TestStatementInspector.getStatements();
         boolean foundVersionedUpdate = false;
         for (String sql : sqls) {
-            String lower = sql.toLowerCase(Locale.ROOT);
-            if (lower.contains("update") && lower.contains("market_stock") && lower.contains("version")) {
-                foundVersionedUpdate = true;
-                break;
+            String normalized = sql.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").trim();
+            if (normalized.startsWith("update market_stock set") && normalized.contains("where")) {
+                String[] parts = normalized.split("\\bwhere\\b");
+                if (parts.length == 2) {
+                    String setClause = parts[0];
+                    String whereClause = parts[1];
+                    boolean hasVersionInSet = setClause.contains("version=?") || setClause.contains("version = ?");
+                    boolean hasVersionInWhere = whereClause.contains("version=?") || whereClause.contains("version = ?");
+                    boolean hasSkuInWhere = whereClause.contains("sku=?") || whereClause.contains("sku = ?");
+                    if (hasVersionInSet && hasVersionInWhere && hasSkuInWhere) {
+                        foundVersionedUpdate = true;
+                        break;
+                    }
+                }
             }
         }
-        assertTrue(foundVersionedUpdate, "Hibernate must emit UPDATE with version predicate and version set");
+        assertTrue(foundVersionedUpdate, "Hibernate must emit UPDATE market_stock with version in SET, version predicate in WHERE, and sku in WHERE");
     }
 
     @Test
@@ -284,9 +294,8 @@ public class JpaVersionExperimentsTest {
             ExecutionException ex = assertThrows(ExecutionException.class, () -> f2.get(5, TimeUnit.SECONDS));
             Throwable root = ex.getCause();
             boolean isOptimisticConflict = (root instanceof OptimisticLockException) ||
-                    (root != null && root.getCause() instanceof OptimisticLockException) ||
-                    (root != null && root.getClass().getName().contains("StaleObjectState"));
-            assertTrue(isOptimisticConflict, "Worker 2 must fail with optimistic lock exception on flush");
+                    (root != null && root.getCause() instanceof OptimisticLockException);
+            assertTrue(isOptimisticConflict, "Worker 2 must fail specifically with OptimisticLockException at explicit flush()");
 
             // Only Worker 1's purchase is committed
             assertEquals(1L, getStock(sku));
@@ -371,16 +380,17 @@ public class JpaVersionExperimentsTest {
             ExecutionException ex = assertThrows(ExecutionException.class, () -> f2.get(5, TimeUnit.SECONDS));
             Throwable cause = ex.getCause();
             // In resource-local JPA, commit failure throws RollbackException wrapping OptimisticLockException
+            assertInstanceOf(RollbackException.class, cause, "Commit failure must throw RollbackException at commit boundary");
             boolean hasOptimisticInChain = false;
             Throwable cur = cause;
             while (cur != null) {
-                if (cur instanceof OptimisticLockException || cur.getClass().getName().contains("StaleObjectState")) {
+                if (cur instanceof OptimisticLockException) {
                     hasOptimisticInChain = true;
                     break;
                 }
                 cur = cur.getCause();
             }
-            assertTrue(hasOptimisticInChain, "Commit boundary must fail with OptimisticLockException in cause chain");
+            assertTrue(hasOptimisticInChain, "Commit boundary RollbackException must have OptimisticLockException in cause chain");
 
             assertEquals(1L, getStock(sku));
             assertEquals(1L, getVersion(sku));
@@ -432,6 +442,7 @@ public class JpaVersionExperimentsTest {
 
             boolean observerDone = observerDoneLatch.await(5, TimeUnit.SECONDS);
             assertTrue(observerDone);
+            assertTrue(observerFuture.get(5, TimeUnit.SECONDS), "Observer thread must complete without assertion failures");
 
             // Now rollback the transaction
             em.getTransaction().rollback();
@@ -483,6 +494,11 @@ public class JpaVersionExperimentsTest {
             Future<Boolean> f2 = executor.submit(() -> {
                 boolean gateOpen = startGate.await(5, TimeUnit.SECONDS);
                 assertTrue(gateOpen);
+                int attempts = 0;
+                boolean attempt1HadOptimisticConflict = false;
+
+                // Attempt 1: Must encounter OptimisticLockException specifically
+                attempts++;
                 EntityManager em2 = emf.createEntityManager();
                 try {
                     em2.getTransaction().begin();
@@ -494,18 +510,44 @@ public class JpaVersionExperimentsTest {
 
                     s2.decrementStock(1);
                     em2.persist(new JpaMarketPurchase(retryPurchaseId, sku, 1));
-                    em2.flush(); // Throws conflict
+                    em2.flush(); // Throws OptimisticLockException
                     em2.getTransaction().commit();
-                    return true;
-                } catch (Exception ex) {
+                    fail("Attempt 1 must throw OptimisticLockException on flush");
+                } catch (OptimisticLockException ole) {
+                    attempt1HadOptimisticConflict = true;
                     if (em2.getTransaction().isActive()) {
                         em2.getTransaction().rollback();
+                    }
+                } catch (Throwable t) {
+                    boolean foundOptimistic = false;
+                    Throwable cur = t;
+                    while (cur != null) {
+                        if (cur instanceof OptimisticLockException) {
+                            foundOptimistic = true;
+                            break;
+                        }
+                        cur = cur.getCause();
+                    }
+                    if (foundOptimistic) {
+                        attempt1HadOptimisticConflict = true;
+                        if (em2.getTransaction().isActive()) {
+                            em2.getTransaction().rollback();
+                        }
+                    } else {
+                        // Connection/timeout/constraint error - do NOT proceed to retry
+                        if (em2.getTransaction().isActive()) {
+                            em2.getTransaction().rollback();
+                        }
+                        throw t;
                     }
                 } finally {
                     em2.close();
                 }
 
-                // RETRY: Open a brand-new EntityManager and new Transaction
+                assertTrue(attempt1HadOptimisticConflict, "Attempt 1 must fail specifically with OptimisticLockException");
+
+                // Attempt 2: RETRY with a brand-new EntityManager and new Transaction
+                attempts++;
                 EntityManager emRetry = emf.createEntityManager();
                 try {
                     emRetry.getTransaction().begin();
@@ -516,10 +558,17 @@ public class JpaVersionExperimentsTest {
                     freshStock.decrementStock(1);
                     emRetry.persist(new JpaMarketPurchase(retryPurchaseId, sku, 1));
                     emRetry.getTransaction().commit();
-                    return true;
+                } catch (Exception ex) {
+                    if (emRetry.getTransaction().isActive()) {
+                        emRetry.getTransaction().rollback();
+                    }
+                    throw ex;
                 } finally {
                     emRetry.close();
                 }
+
+                assertEquals(2, attempts, "Exactly two attempts must be executed in this retry scenario");
+                return true;
             });
             futures.add(f2);
 

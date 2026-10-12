@@ -370,45 +370,50 @@ public class MarketLockingConcurrencyTest {
             Long t1Pid = t1PidRef.get();
             assertNotNull(t1Pid, "T1 backend PID must be captured");
 
-            CountDownLatch t2Started = new CountDownLatch(1);
+            // Worker T2 runs inside an outer REQUIRED transaction in the test harness
+            // It explicitly captures and publishes its backend PID before calling purchase()
+            AtomicReference<Long> t2PidRef = new AtomicReference<>();
+            CountDownLatch t2PidPublished = new CountDownLatch(1);
+
+            TransactionTemplate outerTxTemplate = new TransactionTemplate(transactionManager);
+            outerTxTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
+
             Future<PurchaseResult> f2 = executor.submit(() -> {
-                t2Started.countDown();
-                return pessimisticService.purchase(UUID.randomUUID(), sku, 1);
+                return outerTxTemplate.execute(status -> {
+                    Long pid = jdbcTemplate.queryForObject("SELECT pg_backend_pid()", Long.class);
+                    t2PidRef.set(pid);
+                    t2PidPublished.countDown();
+                    // Service participates in this outer REQUIRED transaction
+                    return pessimisticService.purchase(UUID.randomUUID(), sku, 1);
+                });
             });
             futures.add(f2);
 
-            assertTrue(t2Started.await(2, TimeUnit.SECONDS), "T2 thread must start");
+            assertTrue(t2PidPublished.await(5, TimeUnit.SECONDS), "T2 must publish its backend PID");
+            Long t2Pid = t2PidRef.get();
+            assertNotNull(t2Pid, "T2 backend PID must not be null");
+            assertNotEquals(t1Pid, t2Pid, "T1 and T2 must operate on distinct database connections/sessions");
 
             // Query PostgreSQL observer connection with typed SQL: SELECT ?::int = ANY(pg_blocking_pids(?::int))
+            // directly verifying that T1 is the blocking PID and T2 is the blocked PID
             boolean observedBlocked = false;
-            long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+            long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
 
             while (System.nanoTime() < deadlineNanos) {
-                List<Long> blockedPids = jdbcTemplate.query(
-                        "SELECT pid FROM pg_stat_activity WHERE pid != ? AND cardinality(pg_blocking_pids(pid)) > 0",
-                        (rs, rowNum) -> rs.getLong("pid"),
-                        t1Pid
+                Boolean isBlocked = jdbcTemplate.queryForObject(
+                        "SELECT ?::int = ANY(pg_blocking_pids(?::int))",
+                        Boolean.class,
+                        t1Pid,
+                        t2Pid
                 );
-
-                for (Long t2Pid : blockedPids) {
-                    Boolean isBlocked = jdbcTemplate.queryForObject(
-                            "SELECT ?::int = ANY(pg_blocking_pids(?::int))",
-                            Boolean.class,
-                            t1Pid,
-                            t2Pid
-                    );
-                    if (Boolean.TRUE.equals(isBlocked)) {
-                        observedBlocked = true;
-                        break;
-                    }
-                }
-                if (observedBlocked) {
+                if (Boolean.TRUE.equals(isBlocked)) {
+                    observedBlocked = true;
                     break;
                 }
                 Thread.sleep(50);
             }
 
-            assertTrue(observedBlocked, "pg_blocking_pids must confirm T2 is blocked directly by T1 PID " + t1Pid);
+            assertTrue(observedBlocked, "pg_blocking_pids must confirm T2 (PID " + t2Pid + ") is blocked directly by T1 (PID " + t1Pid + ")");
 
             // Release T1 to commit
             t1ReleaseGate.countDown();

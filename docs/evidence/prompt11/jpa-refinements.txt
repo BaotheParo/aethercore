@@ -1,0 +1,36 @@
+================================================================================
+AETHERCORE JPA & CONCURRENCY REFINEMENTS EVIDENCE - PROMPT 11
+================================================================================
+
+1. JPA-1 SQL Captured & Normalized Verification:
+   Captured Statement: update market_stock set available=?,version=? where sku=? and version=?
+   Validation Checks:
+   - SET clause: Contains version update ('version=?') and field update ('available=?')
+   - WHERE clause: Contains primary key predicate ('sku=?') AND optimistic version predicate ('version=?')
+   Outcome: VERIFIED (Hibernate 6.5.3 automatic version increment & version check predicate)
+
+2. JPA-2 vs JPA-3 Failure Boundary Demarcation:
+   - JPA-2 (Explicit Flush):
+     Invocation: em.flush()
+     Observed Exception: jakarta.persistence.OptimisticLockException
+     Mechanism: Hibernate validates update count == 0 during SQL statement execution in flush().
+   - JPA-3 (Commit Boundary without Flush):
+     Invocation: tx.commit()
+     Observed Exception: jakarta.persistence.RollbackException
+     Cause Chain: RollbackException -> OptimisticLockException -> StaleObjectStateException
+     Mechanism: Dirty checking occurs automatically at commit boundary; update count 0 triggers transaction rollback.
+
+3. JPA-5 Verified Optimistic Conflict & Fresh Retry:
+   - Attempt 1: Explicitly verified to fail specifically with OptimisticLockException (other errors fail fast without retry).
+   - Attempt Count: Exactly 2 attempts executed.
+   - Attempt 2: Brand-new EntityManager reads committed version 1, available 1 -> commits version 2, available 0.
+   - Outcome: VERIFIED (Clean fresh persistence context recovery).
+
+4. C4 Worker Identity & pg_blocking_pids Locking Relation:
+   - Worker T1: Holds SELECT ... FOR UPDATE row lock inside its transaction; backend PID published.
+   - Worker T2: Executes inside an outer TransactionTemplate (REQUIRED), captures its own backend PID via SELECT pg_backend_pid(), published before purchase().
+   - Distinct Sessions: assertNotEquals(t1Pid, t2Pid) PASS.
+   - PostgreSQL Lock Assertion:
+     Query: SELECT ?::int = ANY(pg_blocking_pids(?::int)) with t1Pid, t2Pid
+     Result: TRUE (Kernel PostgreSQL engine confirms T2 is actively queued behind T1 on DRAGON_EGG tuple).
+   - Post-Commit: T1 commits -> T2 unblocks -> T2 sees available == 0 -> returns NOT_AVAILABLE. Invariant preserved.

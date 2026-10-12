@@ -1,3 +1,5 @@
+[LƯU Ý ĐÍNH CHÍNH - PROMPT 11]: Tên các lớp test core trong summary này là tên tổng hợp lịch sử có sai lệch (xem chi tiết đính chính tại docs/experiments/prompt10-execution-notes.md). Tên lớp thực tế trong codebase: PlayerKeyExperimentsTest, WrapperAndPrecisionExperimentsTest, RecordExperimentsTest, DamageStrategyExperimentsTest.
+
 ===============================================================================
 AETHERCORE - PROMPT 10 TEST EXECUTION SUMMARY
 ===============================================================================
