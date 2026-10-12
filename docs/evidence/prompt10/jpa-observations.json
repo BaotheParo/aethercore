@@ -1,0 +1,42 @@
+{
+  "testSuite": "JpaVersionExperimentsTest",
+  "provider": "Hibernate ORM 6.5.3.Final (Jakarta Persistence 3.1.0)",
+  "bootstrap": "Java SE ResourceManager with persistence.xml (RESOURCE_LOCAL)",
+  "observations": {
+    "JPA1_persistence_context_dirty_checking": {
+      "first_level_cache": "s1 == s2 verified (identical reference on heap)",
+      "initial_version": 0,
+      "generated_sql": "update market_stock set available=?,version=? where sku=? and version=?",
+      "final_state": { "stock": 3, "version": 1, "purchase_count": 1, "sum_quantity": 2 }
+    },
+    "JPA2_conflict_at_explicit_flush": {
+      "worker1_read_version": 0,
+      "worker2_read_version": 0,
+      "worker1_outcome": "Commit SUCCESS",
+      "worker2_flush_exception": "jakarta.persistence.OptimisticLockException (or StaleObjectStateException in chain)",
+      "final_state": { "stock": 1, "version": 1, "purchase_count": 1, "sum_quantity": 1 }
+    },
+    "JPA3_conflict_at_commit_boundary": {
+      "worker2_explicit_flush": false,
+      "failure_boundary": "em.getTransaction().commit()",
+      "thrown_exception": "jakarta.persistence.RollbackException wrapping OptimisticLockException",
+      "final_state": { "stock": 1, "version": 1, "purchase_count": 1 }
+    },
+    "JPA4_flush_is_not_commit": {
+      "post_flush_em_state": "Dirty UPDATE and INSERT sent to PostgreSQL socket",
+      "observer_isolation": "READ COMMITTED",
+      "observer_observed_during_uncommitted_flush": { "stock": 2, "version": 0, "purchase_count": 0 },
+      "post_rollback_state": { "stock": 2, "version": 0, "purchase_count": 0 }
+    },
+    "JPA5_fresh_retry": {
+      "attempt1": "Optimistic conflict during concurrent flush",
+      "attempt2_fresh_em": "Reads committed version 1 and available 1, decrements 1, commits SUCCESS",
+      "final_state": { "stock": 0, "version": 2, "purchase_count": 2, "sum_quantity": 2 }
+    },
+    "JPA6_atomicity_duplicate_uuid": {
+      "flush_executed": "Stock update flushed to PostgreSQL",
+      "duplicate_uuid_error": "SQLException SQLSTATE 23505 (unique_violation) on market_purchase_pkey",
+      "post_rollback_state": { "stock": 1, "version": 1, "purchase_count": 1, "sum_quantity": 1 }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence xmlns="https://jakarta.ee/xml/ns/persistence"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xsi:schemaLocation="https://jakarta.ee/xml/ns/persistence https://jakarta.ee/xml/ns/persistence/persistence_3_0.xsd"
+             version="3.0">
+
+    <persistence-unit name="aethercore-market-jpa-test" transaction-type="RESOURCE_LOCAL">
+        <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+        <class>com.aethercore.backend.market.jpa.JpaMarketStock</class>
+        <class>com.aethercore.backend.market.jpa.JpaMarketPurchase</class>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+
+        <properties>
+            <!-- Schema is managed strictly by Flyway; Hibernate only validates -->
+            <property name="hibernate.hbm2ddl.auto" value="validate"/>
+            <property name="hibernate.dialect" value="org.hibernate.dialect.PostgreSQLDialect"/>
+            <property name="hibernate.session_factory.statement_inspector"
+                      value="com.aethercore.backend.market.jpa.TestStatementInspector"/>
+        </properties>
+    </persistence-unit>
+</persistence>

@@ -20,8 +20,22 @@ import java.util.UUID;
  *   <li>Executes conditional UPDATE matching the exact expected version:
  *       {@code WHERE sku = ? AND version = ? AND available >= ?}.</li>
  *   <li>If affected rows is 0, throws {@link StockVersionConflictException} to roll back the current transaction.</li>
- *   <li>Caller or retry harness catches the conflict and retries in a new, independent transaction.</li>
+ *   <li>Any retry must be executed by the caller in a new, unpolluted transaction.</li>
  * </ol>
+ *
+ * <p><b>Transaction Propagation & SUCCESS Contract:</b>
+ * <ul>
+ *   <li>The underlying {@link TransactionTemplate} uses default {@code PROPAGATION_REQUIRED}.</li>
+ *   <li><b>When caller has no active transaction:</b> The template starts a new transaction,
+ *       executes the optimistic conditional update and purchase insertion, and commits upon method exit.
+ *       Returning {@link PurchaseResult#SUCCESS} indicates a durably committed purchase.</li>
+ *   <li><b>When caller has an active transaction:</b> The service participates in the caller's
+ *       existing transaction. Returning {@link PurchaseResult#SUCCESS} indicates that the optimistic
+ *       update and purchase insert succeeded within the current transaction context. However,
+ *       if the outer transaction subsequently encounters an error and rolls back, this purchase
+ *       will also be rolled back as part of the outer transaction boundary.</li>
+ *   <li><b>Isolation:</b> Configured with {@code ISOLATION_READ_COMMITTED}.</li>
+ * </ul>
  */
 @Service
 public class OptimisticMarketPurchaseService {
@@ -54,12 +68,12 @@ public class OptimisticMarketPurchaseService {
     }
 
     /**
-     * Attempts a single optimistic purchase.
+     * Attempts an optimistic purchase within a transaction.
      *
      * @param purchaseId Non-null unique purchase ID
      * @param sku Non-null, non-blank item SKU
      * @param quantity Positive integer (> 0)
-     * @return {@link PurchaseResult#SUCCESS} if purchase recorded; {@link PurchaseResult#NOT_AVAILABLE} if insufficient stock
+     * @return {@link PurchaseResult#SUCCESS} if purchase recorded; {@link PurchaseResult#NOT_AVAILABLE} if insufficient stock or missing SKU
      * @throws StockVersionConflictException if a concurrent modification changed the stock version
      * @throws IllegalArgumentException if inputs are invalid
      */
@@ -73,6 +87,8 @@ public class OptimisticMarketPurchaseService {
             }
 
             StockSnapshot snapshot = opt.get();
+            onSnapshotRead(snapshot);
+
             if (snapshot.available() < quantity) {
                 return PurchaseResult.NOT_AVAILABLE;
             }
@@ -102,66 +118,11 @@ public class OptimisticMarketPurchaseService {
     }
 
     /**
-     * Executes purchase against an explicit expected snapshot (useful for deterministic concurrency testing).
+     * Extension point invoked immediately after reading the snapshot within the active transaction.
+     * Subclasses (e.g. test coordinators) may override this hook without altering production business logic.
      */
-    public PurchaseResult purchaseWithExpectedSnapshot(UUID purchaseId, StockSnapshot snapshot, int quantity) {
-        Objects.requireNonNull(snapshot, "snapshot must not be null");
-        validateInputs(purchaseId, snapshot.sku(), quantity);
-
-        return transactionTemplate.execute(status -> {
-            if (snapshot.available() < quantity) {
-                return PurchaseResult.NOT_AVAILABLE;
-            }
-
-            int updated = jdbcTemplate.update(
-                    "UPDATE market_stock SET available = available - ?, version = version + 1 WHERE sku = ? AND version = ? AND available >= ?",
-                    (long) quantity,
-                    snapshot.sku(),
-                    snapshot.version(),
-                    (long) quantity
-            );
-
-            if (updated == 0) {
-                throw new StockVersionConflictException(snapshot.sku(), snapshot.version());
-            }
-
-            jdbcTemplate.update(
-                    "INSERT INTO market_purchase (id, sku, quantity, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
-                    purchaseId,
-                    snapshot.sku(),
-                    (long) quantity
-            );
-
-            return PurchaseResult.SUCCESS;
-        });
-    }
-
-    /**
-     * Retries optimistic purchase in a fresh transaction upon {@link StockVersionConflictException}.
-     */
-    public PurchaseResult purchaseWithRetry(UUID purchaseId, String sku, int quantity, int maxRetries) {
-        if (maxRetries < 0) {
-            throw new IllegalArgumentException("maxRetries must not be negative");
-        }
-
-        for (int attempt = 0; attempt <= maxRetries; attempt++) {
-            try {
-                return purchase(purchaseId, sku, quantity);
-            } catch (StockVersionConflictException ex) {
-                if (attempt >= maxRetries) {
-                    throw ex;
-                }
-                try {
-                    // Exponential backoff with jitter to resolve optimistic retry storms under high contention
-                    long backoffMs = Math.min(50L, (1L << Math.min(attempt, 5)) + java.util.concurrent.ThreadLocalRandom.current().nextInt(5));
-                    Thread.sleep(backoffMs);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    throw new RuntimeException("Interrupted during optimistic retry backoff", ie);
-                }
-            }
-        }
-        throw new IllegalStateException("Unexpected exit from purchaseWithRetry loop");
+    protected void onSnapshotRead(StockSnapshot snapshot) {
+        // Default: no-op in production
     }
 
     private void validateInputs(UUID purchaseId, String sku, int quantity) {

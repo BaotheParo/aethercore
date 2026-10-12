@@ -1,0 +1,43 @@
+{
+  "testSuite": "MarketLockingConcurrencyTest",
+  "environment": "PostgreSQL 16.15 alpine (Docker Desktop Engine 29.5.3, Testcontainers 1.21.4)",
+  "observations": {
+    "C2_optimistic_conflict": {
+      "worker1_pid": "distinct session A",
+      "worker2_pid": "distinct session B",
+      "worker1_snapshot": { "sku": "NETHER_STAR", "available": 1, "version": 0 },
+      "worker2_snapshot": { "sku": "NETHER_STAR", "available": 1, "version": 0 },
+      "worker1_outcome": "SUCCESS",
+      "worker2_outcome": "StockVersionConflictException(expectedVersion=0)",
+      "final_state": { "stock": 0, "version": 1, "purchase_count": 1, "sum_quantity": 1 },
+      "invariant_preserved": true
+    },
+    "C3_optimistic_retry": {
+      "attempt1_outcome": "StockVersionConflictException",
+      "attempt2_outcome": "SUCCESS in fresh transaction",
+      "final_state": { "stock": 0, "version": 2, "purchase_count": 2, "sum_quantity": 2 },
+      "invariant_preserved": true
+    },
+    "C4_pessimistic_lock_wait": {
+      "lock_type": "Row-level exclusive lock via SELECT ... FOR UPDATE",
+      "t1_holding_lock": true,
+      "t2_blocked_in_postgres": true,
+      "verification_query": "SELECT ?::int = ANY(pg_blocking_pids(?::int))",
+      "blocking_relation_confirmed": true,
+      "stock_one_outcomes": { "t1": "SUCCESS", "t2": "NOT_AVAILABLE (unblocked after commit and sees 0 stock)" },
+      "final_state": { "stock": 0, "version": 1, "purchase_count": 1, "sum_quantity": 1 }
+    },
+    "C5_mixed_writers_version_invalidation": {
+      "worker_A": "holds snapshot version 0 for SKU ANCIENT_DEBRIS",
+      "writer_B": "commits 1 unit via Atomic Conditional UPDATE (FixedMarketPurchaseService)",
+      "db_state_after_B": { "stock": 4, "version": 1 },
+      "worker_A_outcome": "StockVersionConflictException(expectedVersion=0)",
+      "proof": "Writer B properly advanced version = version + 1; Worker A was prevented from writing stale snapshot even though stock (4) was sufficient"
+    },
+    "C6_C7_rollback_fault_injection": {
+      "duplicate_uuid_sqlstate": "23505 (unique_violation)",
+      "optimistic_rollback": "Stock and version restored completely to baseline",
+      "pessimistic_rollback": "Stock and version restored completely to baseline"
+    }
+  }
+}

@@ -1,0 +1,42 @@
+===============================================================================
+AETHERCORE - PROMPT 10 TEST EXECUTION SUMMARY
+===============================================================================
+Command: mvn clean test
+Reactor Result: BUILD SUCCESS
+Total Tests Run: 65
+Failures: 0
+Errors: 0
+Skipped: 0
+
+Breakdown by Module & Class:
+1. core-lab (34 tests)
+   - PlayerKeyExperimentsTest: 8 tests PASS
+   - PlayerKeyWrapperTest: 8 tests PASS
+   - PlayerKeyRecordTest: 6 tests PASS
+   - BigDecimalExperimentsTest: 6 tests PASS
+   - DamageStrategyDispatchTest: 6 tests PASS
+
+2. backend-app (31 tests)
+   - JpaVersionExperimentsTest: 6 tests PASS
+     * jpa1_persistenceContextAndDirtyChecking
+     * jpa2_twoPersistenceContexts_conflictAtExplicitFlush
+     * jpa3_conflictAtCommitBoundary_withoutExplicitFlush
+     * jpa4_flushIsNotCommit_uncommittedDataInvisibleAndRollsBack
+     * jpa5_retryWithFreshEntityManager_succeeds
+     * jpa6_atomicity_purchaseInsertFailureAfterStockFlush_restoresBaseline
+   - MarketLockingConcurrencyTest: 11 tests PASS
+     * optimisticService_singlePurchase_decrementsStockAndIncrementsVersion
+     * optimisticService_controlledConflict_twoRealTransactions_oneSucceedsOneConflicts
+     * optimisticService_retryInFreshTransaction_succeeds
+     * pessimisticService_lockWait_stockOne_observedViaPgBlockingPids
+     * mixedWriters_atomicUpdateAdvancesVersion_causesOptimisticConflict
+     * optimisticService_duplicateUuidRollback_restoresStockAndVersion
+     * pessimisticService_duplicateUuidRollback_restoresStockAndVersion
+     * validation_invalidInputs_rejectedWithoutDbChange
+     * missingSkuOrInsufficientStock_returnsNotAvailable
+     * optimisticService_outerRollback_restoresStockAndVersion
+     * pessimisticService_outerRollback_restoresStockAndVersion
+   - MarketPurchaseConcurrencyTest: 9 tests PASS
+   - LabEntryIntegrationTest: 3 tests PASS
+   - DamageStrategyWiringTest: 2 tests PASS
+===============================================================================

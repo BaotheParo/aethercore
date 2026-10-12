@@ -9,7 +9,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.function.Consumer;
 
 /**
  * M2-E1B: Pessimistic Locking Purchase Service.
@@ -24,6 +23,20 @@ import java.util.function.Consumer;
  *   <li>Inserts purchase record into {@code market_purchase}.</li>
  *   <li>Returns {@link PurchaseResult#SUCCESS} upon commit.</li>
  * </ol>
+ *
+ * <p><b>Transaction Propagation & SUCCESS Contract:</b>
+ * <ul>
+ *   <li>The underlying {@link TransactionTemplate} uses default {@code PROPAGATION_REQUIRED}.</li>
+ *   <li><b>When caller has no active transaction:</b> The template starts a new transaction,
+ *       executes the pessimistic row lock, decrement, and purchase insertion, and commits upon method exit.
+ *       Returning {@link PurchaseResult#SUCCESS} indicates a durably committed purchase.</li>
+ *   <li><b>When caller has an active transaction:</b> The service participates in the caller's
+ *       existing transaction. Returning {@link PurchaseResult#SUCCESS} indicates that the row lock,
+ *       decrement, and purchase insert succeeded within the current transaction context. However,
+ *       if the outer transaction subsequently encounters an error and rolls back, this purchase
+ *       and row lock release will also be rolled back as part of the outer transaction boundary.</li>
+ *   <li><b>Isolation:</b> Configured with {@code ISOLATION_READ_COMMITTED}.</li>
+ * </ul>
  */
 @Service
 public class PessimisticMarketPurchaseService {
@@ -42,16 +55,14 @@ public class PessimisticMarketPurchaseService {
 
     /**
      * Executes purchase using pessimistic SELECT ... FOR UPDATE row locking.
+     *
+     * @param purchaseId Non-null unique purchase ID
+     * @param sku Non-null, non-blank item SKU
+     * @param quantity Positive integer (> 0)
+     * @return {@link PurchaseResult#SUCCESS} if purchase recorded; {@link PurchaseResult#NOT_AVAILABLE} if insufficient stock or missing SKU
+     * @throws IllegalArgumentException if inputs are invalid
      */
     public PurchaseResult purchase(UUID purchaseId, String sku, int quantity) {
-        return purchaseWithLockHook(purchaseId, sku, quantity, null);
-    }
-
-    /**
-     * Executes purchase with an optional hook called immediately after acquiring the row-level lock.
-     * Useful for deterministic testing of lock contention and observing blocking PIDs in PostgreSQL.
-     */
-    public PurchaseResult purchaseWithLockHook(UUID purchaseId, String sku, int quantity, Consumer<StockSnapshot> onLockAcquired) {
         if (purchaseId == null) {
             throw new IllegalArgumentException("purchaseId must not be null");
         }
@@ -75,11 +86,7 @@ public class PessimisticMarketPurchaseService {
             }
 
             StockSnapshot locked = rows.get(0);
-
-            // Optional hook inside the lock-holding transaction
-            if (onLockAcquired != null) {
-                onLockAcquired.accept(locked);
-            }
+            onLockAcquired(locked);
 
             if (locked.available() < quantity) {
                 return PurchaseResult.NOT_AVAILABLE;
@@ -106,5 +113,13 @@ public class PessimisticMarketPurchaseService {
 
             return PurchaseResult.SUCCESS;
         });
+    }
+
+    /**
+     * Extension point invoked immediately after acquiring the exclusive row lock inside the transaction.
+     * Subclasses (e.g. test coordinators) may override this hook to observe blocking PIDs without altering production logic.
+     */
+    protected void onLockAcquired(StockSnapshot locked) {
+        // Default: no-op in production
     }
 }

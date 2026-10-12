@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -15,6 +16,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
@@ -22,15 +24,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * M2-E1B: Concurrency and Locking Strategy Comparison Integration Test.
- * Compares:
- * 1. Atomic Conditional UPDATE (FixedMarketPurchaseService)
- * 2. Optimistic Concurrency Control (OptimisticMarketPurchaseService)
- * 3. Pessimistic Row Locking (PessimisticMarketPurchaseService)
- *
- * Verifies version increment invariants, conflict rollbacks, retry in fresh transactions,
- * real PostgreSQL pg_blocking_pids() row-lock wait observation without harness deadlock,
- * mixed writers consistency, and outer transaction rollback boundaries.
+ * M2-E1B: Concurrency and Locking Strategy Comparison Integration Test (Prompt 10 Refined).
+ * Verifies:
+ * 1. Controlled Optimistic Conflict across two real purchase() transactions reading distinct snapshots from DB.
+ * 2. Optimistic Retry in fresh transaction after previous transaction rolled back.
+ * 3. Pessimistic lock wait observed via typed PostgreSQL `pg_blocking_pids()` array query without harness deadlock.
+ * 4. Mixed writer invariant: atomic/pessimistic update advances version and invalidates concurrent optimistic snapshot.
+ * 5. Rollback on duplicate UUID insertion error restores stock and version.
+ * 6. Input validation and insufficient stock contracts.
+ * 7. Outer transaction rollback boundaries for both optimistic and pessimistic services.
  */
 @SpringBootTest
 @Testcontainers
@@ -123,8 +125,51 @@ public class MarketLockingConcurrencyTest {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             executor.shutdownNow();
-            AssertionError ae = new AssertionError("Cleanup interrupted while waiting for worker termination", e);
-            throw ae;
+            throw new AssertionError("Cleanup interrupted while waiting for worker termination", e);
+        }
+    }
+
+    // --- A1 & A2: Non-static Inner Subclasses for Hooking ---
+
+    private class HookedOptimisticService extends OptimisticMarketPurchaseService {
+        private final CyclicBarrier barrier;
+        private final CountDownLatch w1DoneLatch;
+        private final boolean isWorker2;
+        final List<Long> pids = Collections.synchronizedList(new ArrayList<>());
+        final List<StockSnapshot> snapshots = Collections.synchronizedList(new ArrayList<>());
+
+        HookedOptimisticService(CyclicBarrier barrier, CountDownLatch w1DoneLatch, boolean isWorker2) {
+            super(MarketLockingConcurrencyTest.this.jdbcTemplate, MarketLockingConcurrencyTest.this.transactionManager);
+            this.barrier = barrier;
+            this.w1DoneLatch = w1DoneLatch;
+            this.isWorker2 = isWorker2;
+        }
+
+        @Override
+        protected void onSnapshotRead(StockSnapshot snapshot) {
+            Long pid = jdbcTemplate.queryForObject("SELECT pg_backend_pid()", Long.class);
+            pids.add(pid);
+            snapshots.add(snapshot);
+
+            if (barrier != null) {
+                try {
+                    barrier.await(5, TimeUnit.SECONDS);
+                } catch (Exception e) {
+                    throw new RuntimeException("Barrier await failed in onSnapshotRead", e);
+                }
+            }
+
+            if (isWorker2 && w1DoneLatch != null) {
+                try {
+                    boolean opened = w1DoneLatch.await(5, TimeUnit.SECONDS);
+                    if (!opened) {
+                        throw new IllegalStateException("w1DoneLatch timed out waiting for worker 1 commit");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("Worker 2 interrupted waiting for worker 1", e);
+                }
+            }
         }
     }
 
@@ -144,110 +189,119 @@ public class MarketLockingConcurrencyTest {
     }
 
     @Test
-    @DisplayName("C2. Optimistic Conflict: Two workers read version 0, one succeeds, one throws StockVersionConflictException with rollback")
-    void optimisticService_controlledConflict_oneSucceedsOneRollsBack() throws Exception {
+    @DisplayName("C2. Optimistic Conflict: Two workers execute purchase(), read version 0, one succeeds, one conflicts and rolls back")
+    void optimisticService_controlledConflict_twoRealTransactions_oneSucceedsOneConflicts() throws Exception {
         String sku = "NETHER_STAR";
         seedStock(sku, 1L);
 
-        StockSnapshot snapshot = optimisticService.findSnapshot(sku).orElseThrow();
-        assertEquals(0L, snapshot.version());
-        assertEquals(1L, snapshot.available());
+        CyclicBarrier readBarrier = new CyclicBarrier(2);
+        CountDownLatch w1DoneLatch = new CountDownLatch(1);
+
+        HookedOptimisticService service1 = new HookedOptimisticService(readBarrier, null, false);
+        HookedOptimisticService service2 = new HookedOptimisticService(readBarrier, w1DoneLatch, true);
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch startGate = new CountDownLatch(1);
-        CountDownLatch worker1Finished = new CountDownLatch(1);
         List<Future<PurchaseResult>> futures = new ArrayList<>();
 
         try {
-            Future<PurchaseResult> future1 = executor.submit(() -> {
-                startGate.await(5, TimeUnit.SECONDS);
+            Future<PurchaseResult> f1 = executor.submit(() -> {
+                boolean gateOpen = startGate.await(5, TimeUnit.SECONDS);
+                assertTrue(gateOpen, "startGate must open");
                 try {
-                    return optimisticService.purchaseWithExpectedSnapshot(UUID.randomUUID(), snapshot, 1);
+                    return service1.purchase(UUID.randomUUID(), sku, 1);
                 } finally {
-                    worker1Finished.countDown();
+                    w1DoneLatch.countDown();
                 }
             });
-            futures.add(future1);
+            futures.add(f1);
 
-            Future<PurchaseResult> future2 = executor.submit(() -> {
-                startGate.await(5, TimeUnit.SECONDS);
-                boolean w1Done = worker1Finished.await(5, TimeUnit.SECONDS);
-                if (!w1Done) {
-                    throw new IllegalStateException("worker1 timed out");
-                }
-                return optimisticService.purchaseWithExpectedSnapshot(UUID.randomUUID(), snapshot, 1);
+            Future<PurchaseResult> f2 = executor.submit(() -> {
+                boolean gateOpen = startGate.await(5, TimeUnit.SECONDS);
+                assertTrue(gateOpen, "startGate must open");
+                return service2.purchase(UUID.randomUUID(), sku, 1);
             });
-            futures.add(future2);
+            futures.add(f2);
 
             startGate.countDown();
 
-            PurchaseResult r1 = future1.get(5, TimeUnit.SECONDS);
+            PurchaseResult r1 = f1.get(5, TimeUnit.SECONDS);
             assertEquals(PurchaseResult.SUCCESS, r1);
 
-            ExecutionException ex = assertThrows(ExecutionException.class, () -> future2.get(5, TimeUnit.SECONDS));
+            ExecutionException ex = assertThrows(ExecutionException.class, () -> f2.get(5, TimeUnit.SECONDS));
             assertInstanceOf(StockVersionConflictException.class, ex.getCause());
             StockVersionConflictException conflictEx = (StockVersionConflictException) ex.getCause();
             assertEquals(sku, conflictEx.getSku());
             assertEquals(0L, conflictEx.getExpectedVersion());
 
+            // Verify both workers executed in distinct backend sessions and read identical snapshot version 0
+            assertEquals(1, service1.pids.size());
+            assertEquals(1, service2.pids.size());
+            assertNotEquals(service1.pids.get(0), service2.pids.get(0), "Workers must run on distinct PostgreSQL backend PIDs");
+            assertEquals(0L, service1.snapshots.get(0).version(), "Worker 1 read initial version 0");
+            assertEquals(0L, service2.snapshots.get(0).version(), "Worker 2 read stale version 0");
+
+            // Final state: only Worker 1 was committed; Worker 2 rolled back
             assertEquals(0L, getStock(sku));
             assertEquals(1L, getVersion(sku));
             assertEquals(1, getPurchaseCount(sku));
             assertEquals(1L, getSumPurchasedQuantity(sku));
-            assertEquals(1L, getStock(sku) + getSumPurchasedQuantity(sku), "Invariant holds after conflict rollback");
+            assertEquals(1L, getStock(sku) + getSumPurchasedQuantity(sku), "Stock invariant preserved after conflict rollback");
         } finally {
             safeShutdownExecutor(executor, startGate, futures);
         }
     }
 
     @Test
-    @DisplayName("C3. Optimistic Retry: Worker encountering conflict retries in fresh transaction and succeeds")
+    @DisplayName("C3. Optimistic Retry: Worker encountering conflict retries in a fresh transaction and succeeds")
     void optimisticService_retryInFreshTransaction_succeeds() throws Exception {
         String sku = "BEACON";
         seedStock(sku, 2L);
 
-        StockSnapshot initialSnapshot = optimisticService.findSnapshot(sku).orElseThrow();
-        assertEquals(0L, initialSnapshot.version());
-        assertEquals(2L, initialSnapshot.available());
+        CyclicBarrier readBarrier = new CyclicBarrier(2);
+        CountDownLatch w1DoneLatch = new CountDownLatch(1);
+
+        HookedOptimisticService service1 = new HookedOptimisticService(readBarrier, null, false);
+        HookedOptimisticService service2 = new HookedOptimisticService(readBarrier, w1DoneLatch, true);
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch startGate = new CountDownLatch(1);
-        CountDownLatch worker1Finished = new CountDownLatch(1);
         List<Future<PurchaseResult>> futures = new ArrayList<>();
 
         try {
-            Future<PurchaseResult> future1 = executor.submit(() -> {
-                startGate.await(5, TimeUnit.SECONDS);
+            Future<PurchaseResult> f1 = executor.submit(() -> {
+                boolean gateOpen = startGate.await(5, TimeUnit.SECONDS);
+                assertTrue(gateOpen, "startGate must open");
                 try {
-                    return optimisticService.purchaseWithExpectedSnapshot(UUID.randomUUID(), initialSnapshot, 1);
+                    return service1.purchase(UUID.randomUUID(), sku, 1);
                 } finally {
-                    worker1Finished.countDown();
+                    w1DoneLatch.countDown();
                 }
             });
-            futures.add(future1);
+            futures.add(f1);
 
-            Future<PurchaseResult> future2 = executor.submit(() -> {
-                startGate.await(5, TimeUnit.SECONDS);
-                worker1Finished.await(5, TimeUnit.SECONDS);
-
-                UUID purchaseId = UUID.randomUUID();
+            UUID retryPurchaseId = UUID.randomUUID();
+            Future<PurchaseResult> f2 = executor.submit(() -> {
+                boolean gateOpen = startGate.await(5, TimeUnit.SECONDS);
+                assertTrue(gateOpen, "startGate must open");
                 try {
-                    optimisticService.purchaseWithExpectedSnapshot(purchaseId, initialSnapshot, 1);
-                    fail("Expected StockVersionConflictException on first attempt");
+                    service2.purchase(retryPurchaseId, sku, 1);
+                    fail("Worker 2 must encounter StockVersionConflictException on attempt 1");
                     return PurchaseResult.NOT_AVAILABLE;
-                } catch (StockVersionConflictException e) {
-                    return optimisticService.purchase(purchaseId, sku, 1);
+                } catch (StockVersionConflictException conflict) {
+                    // Driven by caller: retry in a brand-new transaction using standard service
+                    return optimisticService.purchase(retryPurchaseId, sku, 1);
                 }
             });
-            futures.add(future2);
+            futures.add(f2);
 
             startGate.countDown();
 
-            assertEquals(PurchaseResult.SUCCESS, future1.get(5, TimeUnit.SECONDS));
-            assertEquals(PurchaseResult.SUCCESS, future2.get(5, TimeUnit.SECONDS));
+            assertEquals(PurchaseResult.SUCCESS, f1.get(5, TimeUnit.SECONDS));
+            assertEquals(PurchaseResult.SUCCESS, f2.get(5, TimeUnit.SECONDS));
 
             assertEquals(0L, getStock(sku));
-            assertEquals(2L, getVersion(sku), "Version must be 2 after 2 successful purchases");
+            assertEquals(2L, getVersion(sku), "Version incremented to 2 after two successful purchases");
             assertEquals(2, getPurchaseCount(sku));
             assertEquals(2L, getSumPurchasedQuantity(sku));
             assertEquals(2L, getStock(sku) + getSumPurchasedQuantity(sku), "Invariant holds after retry");
@@ -256,158 +310,301 @@ public class MarketLockingConcurrencyTest {
         }
     }
 
+    // --- A3: Pessimistic Row Lock Wait & pg_blocking_pids Observation ---
+
+    private class HookedPessimisticService extends PessimisticMarketPurchaseService {
+        private final CountDownLatch lockAcquired;
+        private final CountDownLatch releaseGate;
+        private final AtomicReference<Long> t1PidRef;
+
+        HookedPessimisticService(CountDownLatch lockAcquired, CountDownLatch releaseGate, AtomicReference<Long> t1PidRef) {
+            super(MarketLockingConcurrencyTest.this.jdbcTemplate, MarketLockingConcurrencyTest.this.transactionManager);
+            this.lockAcquired = lockAcquired;
+            this.releaseGate = releaseGate;
+            this.t1PidRef = t1PidRef;
+        }
+
+        @Override
+        protected void onLockAcquired(StockSnapshot locked) {
+            Long pid = jdbcTemplate.queryForObject("SELECT pg_backend_pid()", Long.class);
+            t1PidRef.set(pid);
+            if (lockAcquired != null) {
+                lockAcquired.countDown();
+            }
+            if (releaseGate != null) {
+                try {
+                    boolean opened = releaseGate.await(5, TimeUnit.SECONDS);
+                    if (!opened) {
+                        throw new IllegalStateException("releaseGate timed out in HookedPessimisticService");
+                    }
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException("HookedPessimisticService interrupted", ie);
+                }
+            }
+        }
+    }
+
     @Test
-    @DisplayName("C4. Pessimistic Lock Wait: T2 blocks on SELECT FOR UPDATE row lock held by T1, verified via pg_blocking_pids()")
-    void pessimisticService_lockWait_observedViaPgBlockingPids() throws Exception {
+    @DisplayName("C4. Pessimistic Lock Wait on Stock 1: T2 blocks on SELECT FOR UPDATE row lock; pg_blocking_pids verified typed")
+    void pessimisticService_lockWait_stockOne_observedViaPgBlockingPids() throws Exception {
         String sku = "DRAGON_EGG";
-        seedStock(sku, 2L);
+        seedStock(sku, 1L);
 
         CountDownLatch t1LockAcquired = new CountDownLatch(1);
         CountDownLatch t1ReleaseGate = new CountDownLatch(1);
-        AtomicReference<Long> t1BackendPidRef = new AtomicReference<>();
+        AtomicReference<Long> t1PidRef = new AtomicReference<>();
+
+        HookedPessimisticService hookedService = new HookedPessimisticService(
+                t1LockAcquired, t1ReleaseGate, t1PidRef
+        );
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
         List<Future<PurchaseResult>> futures = new ArrayList<>();
 
         try {
-            Future<PurchaseResult> future1 = executor.submit(() -> {
-                return pessimisticService.purchaseWithLockHook(UUID.randomUUID(), sku, 1, lockedSnapshot -> {
-                    Long pid = jdbcTemplate.queryForObject("SELECT pg_backend_pid()", Long.class);
-                    t1BackendPidRef.set(pid);
-                    t1LockAcquired.countDown();
-                    try {
-                        boolean opened = t1ReleaseGate.await(5, TimeUnit.SECONDS);
-                        if (!opened) {
-                            throw new IllegalStateException("t1ReleaseGate timed out waiting for observer verification");
-                        }
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        throw new RuntimeException("T1 hook interrupted", e);
-                    }
-                });
-            });
-            futures.add(future1);
+            Future<PurchaseResult> f1 = executor.submit(() -> hookedService.purchase(UUID.randomUUID(), sku, 1));
+            futures.add(f1);
 
-            assertTrue(t1LockAcquired.await(5, TimeUnit.SECONDS), "T1 must acquire pessimistic lock within 5s");
-            Long t1Pid = t1BackendPidRef.get();
+            assertTrue(t1LockAcquired.await(5, TimeUnit.SECONDS), "T1 must acquire row lock within 5s");
+            Long t1Pid = t1PidRef.get();
             assertNotNull(t1Pid, "T1 backend PID must be captured");
 
             CountDownLatch t2Started = new CountDownLatch(1);
-            Future<PurchaseResult> future2 = executor.submit(() -> {
+            Future<PurchaseResult> f2 = executor.submit(() -> {
                 t2Started.countDown();
                 return pessimisticService.purchase(UUID.randomUUID(), sku, 1);
             });
-            futures.add(future2);
+            futures.add(f2);
 
-            assertTrue(t2Started.await(2, TimeUnit.SECONDS), "T2 thread must have started");
+            assertTrue(t2Started.await(2, TimeUnit.SECONDS), "T2 thread must start");
 
-            boolean observedLockWait = false;
+            // Query PostgreSQL observer connection with typed SQL: SELECT ?::int = ANY(pg_blocking_pids(?::int))
+            boolean observedBlocked = false;
             long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
 
             while (System.nanoTime() < deadlineNanos) {
-                List<Map<String, Object>> blockedWorkers = jdbcTemplate.queryForList(
-                        "SELECT pid, pg_blocking_pids(pid) AS blockers FROM pg_stat_activity " +
-                                "WHERE pid != ? AND cardinality(pg_blocking_pids(pid)) > 0",
+                List<Long> blockedPids = jdbcTemplate.query(
+                        "SELECT pid FROM pg_stat_activity WHERE pid != ? AND cardinality(pg_blocking_pids(pid)) > 0",
+                        (rs, rowNum) -> rs.getLong("pid"),
                         t1Pid
                 );
 
-                if (!blockedWorkers.isEmpty()) {
-                    for (Map<String, Object> row : blockedWorkers) {
-                        Object blockersObj = row.get("blockers");
-                        if (blockersObj != null) {
-                            String blockersStr = blockersObj.toString();
-                            if (blockersStr.contains(String.valueOf(t1Pid))) {
-                                observedLockWait = true;
-                                break;
-                            }
-                        }
+                for (Long t2Pid : blockedPids) {
+                    Boolean isBlocked = jdbcTemplate.queryForObject(
+                            "SELECT ?::int = ANY(pg_blocking_pids(?::int))",
+                            Boolean.class,
+                            t1Pid,
+                            t2Pid
+                    );
+                    if (Boolean.TRUE.equals(isBlocked)) {
+                        observedBlocked = true;
+                        break;
                     }
                 }
-                if (observedLockWait) {
+                if (observedBlocked) {
                     break;
                 }
                 Thread.sleep(50);
             }
 
-            assertTrue(observedLockWait, "Must observe T2's backend PID blocked by T1's PID (" + t1Pid + ") via pg_blocking_pids()");
+            assertTrue(observedBlocked, "pg_blocking_pids must confirm T2 is blocked directly by T1 PID " + t1Pid);
 
+            // Release T1 to commit
             t1ReleaseGate.countDown();
 
-            PurchaseResult r1 = future1.get(5, TimeUnit.SECONDS);
-            PurchaseResult r2 = future2.get(5, TimeUnit.SECONDS);
+            PurchaseResult r1 = f1.get(5, TimeUnit.SECONDS);
+            PurchaseResult r2 = f2.get(5, TimeUnit.SECONDS);
 
-            assertEquals(PurchaseResult.SUCCESS, r1);
-            assertEquals(PurchaseResult.SUCCESS, r2);
+            assertEquals(PurchaseResult.SUCCESS, r1, "T1 gets the 1 available unit");
+            assertEquals(PurchaseResult.NOT_AVAILABLE, r2, "T2 unblocks after T1 commits and sees 0 units left");
 
             assertEquals(0L, getStock(sku));
-            assertEquals(2L, getVersion(sku));
-            assertEquals(2, getPurchaseCount(sku));
-            assertEquals(2L, getSumPurchasedQuantity(sku));
-            assertEquals(2L, getStock(sku) + getSumPurchasedQuantity(sku), "Invariant holds after serialized pessimistic locks");
+            assertEquals(1L, getVersion(sku));
+            assertEquals(1, getPurchaseCount(sku));
+            assertEquals(1L, getSumPurchasedQuantity(sku));
+            assertEquals(1L, getStock(sku) + getSumPurchasedQuantity(sku), "Invariant holds for serialized pessimistic access");
         } finally {
             safeShutdownExecutor(executor, t1ReleaseGate, futures);
         }
     }
 
-    @Test
-    @DisplayName("C5. Mixed Writers Stress: Atomic, Optimistic, and Pessimistic services compete for stock 30")
-    void mixedWriters_concurrentCompetition_preservesConsistencyAndVersion() throws Exception {
-        String sku = "ANCIENT_DEBRIS";
-        int totalUnits = 30;
-        seedStock(sku, (long) totalUnits);
+    // --- A4: Mixed Writer Invariant: Proves Writer B increments version ---
 
-        int poolSize = 6;
-        ExecutorService executor = Executors.newFixedThreadPool(poolSize);
+    @Test
+    @DisplayName("C5. Mixed Writer Invariant: Writer B committing via Atomic UPDATE increments version and causes Worker A to conflict")
+    void mixedWriters_atomicUpdateAdvancesVersion_causesOptimisticConflict() throws Exception {
+        String sku = "ANCIENT_DEBRIS";
+        seedStock(sku, 5L);
+
+        CyclicBarrier readBarrier = new CyclicBarrier(2);
+        CountDownLatch bDoneLatch = new CountDownLatch(1);
+
+        HookedOptimisticService serviceA = new HookedOptimisticService(readBarrier, bDoneLatch, true);
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch startGate = new CountDownLatch(1);
         List<Future<PurchaseResult>> futures = new ArrayList<>();
 
         try {
-            for (int i = 0; i < 10; i++) {
-                // Group 1: Atomic conditional update
-                futures.add(executor.submit(() -> {
-                    startGate.await(5, TimeUnit.SECONDS);
+            Future<PurchaseResult> futureA = executor.submit(() -> {
+                boolean gateOpen = startGate.await(5, TimeUnit.SECONDS);
+                assertTrue(gateOpen, "startGate must open");
+                return serviceA.purchase(UUID.randomUUID(), sku, 1);
+            });
+            futures.add(futureA);
+
+            Future<PurchaseResult> futureB = executor.submit(() -> {
+                boolean gateOpen = startGate.await(5, TimeUnit.SECONDS);
+                assertTrue(gateOpen, "startGate must open");
+                try {
+                    readBarrier.await(5, TimeUnit.SECONDS);
                     return fixedService.purchase(UUID.randomUUID(), sku, 1);
-                }));
-                // Group 2: Optimistic with retry (using exponential backoff and jitter)
-                futures.add(executor.submit(() -> {
-                    startGate.await(5, TimeUnit.SECONDS);
-                    return optimisticService.purchaseWithRetry(UUID.randomUUID(), sku, 1, 35);
-                }));
-                // Group 3: Pessimistic SELECT FOR UPDATE
-                futures.add(executor.submit(() -> {
-                    startGate.await(5, TimeUnit.SECONDS);
-                    return pessimisticService.purchase(UUID.randomUUID(), sku, 1);
-                }));
-            }
+                } finally {
+                    bDoneLatch.countDown();
+                }
+            });
+            futures.add(futureB);
 
             startGate.countDown();
 
-            int successCount = 0;
-            long deadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
-            for (Future<PurchaseResult> f : futures) {
-                long remaining = deadlineNanos - System.nanoTime();
-                if (remaining <= 0) {
-                    throw new TimeoutException("Monotonic deadline exceeded for mixed writers stress test");
-                }
-                PurchaseResult res = f.get(remaining, TimeUnit.NANOSECONDS);
-                if (res == PurchaseResult.SUCCESS) {
-                    successCount++;
-                }
-            }
+            PurchaseResult resB = futureB.get(5, TimeUnit.SECONDS);
+            assertEquals(PurchaseResult.SUCCESS, resB);
 
-            assertEquals(totalUnits, successCount, "All 30 units must be purchased successfully");
-            assertEquals(0L, getStock(sku), "Stock must be 0");
-            assertEquals((long) totalUnits, getVersion(sku), "Version must be exactly incremented 30 times");
-            assertEquals(totalUnits, getPurchaseCount(sku), "30 purchase records must exist");
-            assertEquals((long) totalUnits, getSumPurchasedQuantity(sku), "Total purchased quantity must equal 30");
-            assertEquals((long) totalUnits, getStock(sku) + getSumPurchasedQuantity(sku), "Mixed writers invariant holds");
+            ExecutionException exA = assertThrows(ExecutionException.class, () -> futureA.get(5, TimeUnit.SECONDS));
+            assertInstanceOf(StockVersionConflictException.class, exA.getCause());
+            StockVersionConflictException conflict = (StockVersionConflictException) exA.getCause();
+            assertEquals(0L, conflict.getExpectedVersion());
+
+            // Database state: only Writer B committed
+            assertEquals(4L, getStock(sku));
+            assertEquals(1L, getVersion(sku), "Version was incremented by Writer B");
+            assertEquals(1, getPurchaseCount(sku));
+            assertEquals(1L, getSumPurchasedQuantity(sku));
+            assertEquals(5L, getStock(sku) + getSumPurchasedQuantity(sku), "Invariant holds");
         } finally {
             safeShutdownExecutor(executor, startGate, futures);
         }
     }
 
+    // --- A4: Rollback Fault Injection & Input Validation ---
+
     @Test
-    @DisplayName("C6. Optimistic Outer Transaction Rollback: restores stock and version despite inner SUCCESS")
+    @DisplayName("C6. Optimistic Service: Rollback on duplicate purchase UUID restores stock and version")
+    void optimisticService_duplicateUuidRollback_restoresStockAndVersion() {
+        String sku = "EMERALD";
+        seedStock(sku, 2L);
+
+        UUID fixedId = UUID.randomUUID();
+
+        PurchaseResult r1 = optimisticService.purchase(fixedId, sku, 1);
+        assertEquals(PurchaseResult.SUCCESS, r1);
+        assertEquals(1L, getStock(sku));
+        assertEquals(1L, getVersion(sku));
+
+        DuplicateKeyException ex = assertThrows(DuplicateKeyException.class, () -> {
+            optimisticService.purchase(fixedId, sku, 1);
+        });
+
+        boolean found23505 = false;
+        Throwable current = ex;
+        while (current != null) {
+            if (current instanceof SQLException sqlEx && "23505".equals(sqlEx.getSQLState())) {
+                found23505 = true;
+                break;
+            }
+            current = current.getCause();
+        }
+        assertTrue(found23505, "Must contain SQLSTATE 23505");
+
+        assertEquals(1L, getStock(sku), "Stock restored to 1");
+        assertEquals(1L, getVersion(sku), "Version remains 1");
+        assertEquals(1, getPurchaseCount(sku));
+        assertEquals(1L, getSumPurchasedQuantity(sku));
+        assertEquals(2L, getStock(sku) + getSumPurchasedQuantity(sku), "Invariant preserved");
+    }
+
+    @Test
+    @DisplayName("C7. Pessimistic Service: Rollback on duplicate purchase UUID restores stock and version")
+    void pessimisticService_duplicateUuidRollback_restoresStockAndVersion() {
+        String sku = "DIAMOND";
+        seedStock(sku, 2L);
+
+        UUID fixedId = UUID.randomUUID();
+
+        PurchaseResult r1 = pessimisticService.purchase(fixedId, sku, 1);
+        assertEquals(PurchaseResult.SUCCESS, r1);
+        assertEquals(1L, getStock(sku));
+        assertEquals(1L, getVersion(sku));
+
+        DuplicateKeyException ex = assertThrows(DuplicateKeyException.class, () -> {
+            pessimisticService.purchase(fixedId, sku, 1);
+        });
+
+        boolean found23505 = false;
+        Throwable current = ex;
+        while (current != null) {
+            if (current instanceof SQLException sqlEx && "23505".equals(sqlEx.getSQLState())) {
+                found23505 = true;
+                break;
+            }
+            current = current.getCause();
+        }
+        assertTrue(found23505, "Must contain SQLSTATE 23505");
+
+        assertEquals(1L, getStock(sku), "Stock restored to 1");
+        assertEquals(1L, getVersion(sku), "Version remains 1");
+        assertEquals(1, getPurchaseCount(sku));
+        assertEquals(1L, getSumPurchasedQuantity(sku));
+        assertEquals(2L, getStock(sku) + getSumPurchasedQuantity(sku), "Invariant preserved");
+    }
+
+    @Test
+    @DisplayName("C8. Input Validation: Invalid quantity, blank SKU, or null purchaseId rejected with IllegalArgumentException")
+    void validation_invalidInputs_rejectedWithoutDbChange() {
+        String sku = "LAPIS";
+        seedStock(sku, 10L);
+
+        // Optimistic
+        assertThrows(IllegalArgumentException.class, () -> optimisticService.purchase(UUID.randomUUID(), sku, 0));
+        assertThrows(IllegalArgumentException.class, () -> optimisticService.purchase(UUID.randomUUID(), sku, -1));
+        assertThrows(IllegalArgumentException.class, () -> optimisticService.purchase(UUID.randomUUID(), "", 1));
+        assertThrows(IllegalArgumentException.class, () -> optimisticService.purchase(null, sku, 1));
+
+        // Pessimistic
+        assertThrows(IllegalArgumentException.class, () -> pessimisticService.purchase(UUID.randomUUID(), sku, 0));
+        assertThrows(IllegalArgumentException.class, () -> pessimisticService.purchase(UUID.randomUUID(), sku, -1));
+        assertThrows(IllegalArgumentException.class, () -> pessimisticService.purchase(UUID.randomUUID(), "  ", 1));
+        assertThrows(IllegalArgumentException.class, () -> pessimisticService.purchase(null, sku, 1));
+
+        assertEquals(10L, getStock(sku));
+        assertEquals(0L, getVersion(sku));
+        assertEquals(0, getPurchaseCount(sku));
+    }
+
+    @Test
+    @DisplayName("C9. Missing SKU or Insufficient Stock returns NOT_AVAILABLE without modifying DB")
+    void missingSkuOrInsufficientStock_returnsNotAvailable() {
+        String sku = "REDSTONE";
+        seedStock(sku, 2L);
+
+        // Insufficient
+        assertEquals(PurchaseResult.NOT_AVAILABLE, optimisticService.purchase(UUID.randomUUID(), sku, 5));
+        assertEquals(PurchaseResult.NOT_AVAILABLE, pessimisticService.purchase(UUID.randomUUID(), sku, 5));
+
+        // Missing
+        assertEquals(PurchaseResult.NOT_AVAILABLE, optimisticService.purchase(UUID.randomUUID(), "UNKNOWN_SKU", 1));
+        assertEquals(PurchaseResult.NOT_AVAILABLE, pessimisticService.purchase(UUID.randomUUID(), "UNKNOWN_SKU", 1));
+
+        assertEquals(2L, getStock(sku));
+        assertEquals(0L, getVersion(sku));
+        assertEquals(0, getPurchaseCount(sku));
+    }
+
+    // --- A4: Outer Transaction Boundary Rollback ---
+
+    @Test
+    @DisplayName("C10. Optimistic Outer Transaction Rollback: restores stock and version despite inner SUCCESS")
     void optimisticService_outerRollback_restoresStockAndVersion() {
         String sku = "TOTEM";
         seedStock(sku, 5L);
@@ -434,7 +631,7 @@ public class MarketLockingConcurrencyTest {
     }
 
     @Test
-    @DisplayName("C7. Pessimistic Outer Transaction Rollback: restores stock and version despite inner SUCCESS")
+    @DisplayName("C11. Pessimistic Outer Transaction Rollback: restores stock and version despite inner SUCCESS")
     void pessimisticService_outerRollback_restoresStockAndVersion() {
         String sku = "ELYTRA";
         seedStock(sku, 5L);
@@ -457,20 +654,6 @@ public class MarketLockingConcurrencyTest {
 
         assertEquals(5L, getStock(sku), "Stock must be restored to 5");
         assertEquals(0L, getVersion(sku), "Version must be restored to 0");
-        assertEquals(0, getPurchaseCount(sku));
-    }
-
-    @Test
-    @DisplayName("C8. Pessimistic Service: Insufficient stock returns NOT_AVAILABLE without modifying stock or version")
-    void pessimisticService_insufficientStock_returnsNotAvailable() {
-        String sku = "TRIDENT";
-        seedStock(sku, 1L);
-
-        PurchaseResult res = pessimisticService.purchase(UUID.randomUUID(), sku, 5);
-
-        assertEquals(PurchaseResult.NOT_AVAILABLE, res);
-        assertEquals(1L, getStock(sku));
-        assertEquals(0L, getVersion(sku));
         assertEquals(0, getPurchaseCount(sku));
     }
 }

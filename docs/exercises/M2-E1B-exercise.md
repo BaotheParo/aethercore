@@ -59,3 +59,39 @@ Nếu HikariCP có `maximum-pool-size = 10`, nhưng có 50 yêu cầu đồng th
 
 **Trả lời của ứng viên:**
 `[AWAITING_CANDIDATE]`
+
+---
+
+### Bài tập 3: Hands-on Challenge: Stock 5, Version 0 — Two Buyers Qty 2
+**Tình huống thực nghiệm:**
+- SKU `ELIXIR` khởi tạo với `available = 5, version = 0`.
+- Hai buyer (Buyer 1 và Buyer 2) cùng đọc snapshot (`available = 5, version = 0`).
+- Mỗi người muốn mua số lượng `qty = 2`.
+
+**Yêu cầu người học tự thực hiện (Không có lời giải điền sẵn):**
+1. **Giai đoạn 1 (Chạy Optimistic không retry):**
+   - Buyer 1 commit trước.
+   - Buyer 2 cố gắng commit với snapshot cũ.
+   - Dự đoán chính xác: Trạng thái kết quả của Buyer 2? Giá trị `available`, `version`, số bản ghi purchase và `SUM(quantity)` trong DB lúc này?
+2. **Giai đoạn 2 (Retry bằng transaction mới độc lập):**
+   - Buyer 2 bắt lỗi conflict và mở transaction mới độc lập để thử lại.
+   - Dự đoán: Snapshot Buyer 2 đọc được ở lần 2? Trạng thái `available`, `version`, số bản ghi purchase và `SUM(quantity)` sau khi Buyer 2 hoàn tất retry?
+3. **Đối chiếu với Pessimistic Flow:**
+   - Nếu cả 2 buyer dùng `PessimisticMarketPurchaseService` (`SELECT ... FOR UPDATE`), dòng thời gian diễn ra như thế nào?
+   - Vì sao số lượng order (`COUNT(*)`) lại khác với tổng số lượng hàng bán ra (`SUM(quantity)`)?
+
+**Dự đoán và Lời giải của ứng viên:**
+`[AWAITING_CANDIDATE]`
+
+---
+
+## Phần 3: Bộ 3 Câu hỏi Phỏng vấn Oral (60–90 giây)
+
+1. *“Optimistic locking có thật sự không khóa gì trong Database engine không?”*  
+   **Ứng viên trả lời:** `[AWAITING_CANDIDATE]`
+
+2. *“SELECT FOR UPDATE xong rồi commit transaction ngay, sau đó mới trừ stock trong transaction khác: Bạn còn được bảo vệ không?”*  
+   **Ứng viên trả lời:** `[AWAITING_CANDIDATE]`
+
+3. *“Nếu một service thứ ba quên tăng version (hoặc UPDATE trực tiếp không check version) thì các service còn lại dùng Optimistic Locking có bị ảnh hưởng không?”*  
+   **Ứng viên trả lời:** `[AWAITING_CANDIDATE]`

@@ -1,0 +1,12 @@
+HEAD: 00398905d676a9b7362fbaf8ce5a7d05a78b8797
+Date: 2026-10-12T15:26:34.8381775+07:00
+Timezone: SE Asia Standard Time
+Host Java Runtime: Oracle JDK 22 (build 22+36-2370)
+Maven: 3.9.12
+Target Bytecode: 21 (--release 21)
+Testcontainers: 1.21.4 (via testcontainers-bom:1.21.4)
+Docker Engine: 29.5.3 (API 1.54, desktop-linux via npipe:////./pipe/docker_engine)
+PostgreSQL Image: postgres:16-alpine (PostgreSQL 16.15)
+Flyway Migrations: V1, V2, V3, V4
+HikariCP pool: maximum-pool-size=10, connection-timeout=5000ms
+PostgreSQL session timeouts: lock_timeout=5s, statement_timeout=10s
