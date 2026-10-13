@@ -1,0 +1,137 @@
+{
+  "schemaVersion" : "1.0.0",
+  "runId" : "prompt19-20261013-210040-b68afb",
+  "timestamp" : "2026-10-13T14:01:09.640792400Z",
+  "database" : {
+    "serverVersion" : "postgres:16-alpine",
+    "databaseName" : "aethercore_idempotency_test",
+    "isolationDefault" : "READ COMMITTED"
+  },
+  "scenarios" : [ {
+    "caseId" : "ID1",
+    "description" : "Sequential replay and lost response simulation",
+    "command" : {
+      "idempotencyKey" : "fddda0cd-7dc3-4405-aa2e-09003fd67675",
+      "callerId" : "c572713c-03fa-4845-accf-e2e397cd5c88",
+      "sku" : "POTION_HEAL",
+      "quantity" : 2
+    },
+    "expected" : {
+      "purchaseCount" : 1,
+      "stock" : 3,
+      "result" : "SUCCESS"
+    },
+    "observed" : {
+      "purchaseId1" : "5142546a-0a8f-47a9-91e8-d256508bd782",
+      "replayed2" : true,
+      "replayed1" : false,
+      "purchaseId2" : "5142546a-0a8f-47a9-91e8-d256508bd782",
+      "purchaseCount" : 1,
+      "stock" : 3
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "ID2",
+    "description" : "Key reuse with mismatched payload and invalid inputs",
+    "command" : {
+      "idempotencyKey" : "7cfa2108-f2e2-4d9f-9099-3af158bca23e",
+      "callerId" : "9fe8c4f6-90c3-4392-a1bb-3a91a9c25b0b"
+    },
+    "expected" : {
+      "stockUnchanged" : 4,
+      "conflictType" : "IdempotencyConflictException"
+    },
+    "observed" : {
+      "finalStock" : 4,
+      "purchaseCount" : 1,
+      "exQtyThrown" : "IdempotencyConflictException",
+      "exSkuThrown" : "IdempotencyConflictException"
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "ID3",
+    "description" : "Two requests with identical key wait on DB lock, verified by pg_blocking_pids",
+    "command" : {
+      "idempotencyKey" : "bb240e47-0f85-4718-bf11-e6b0a1e23535",
+      "callerId" : "ec6c386c-348d-4129-abc3-c4c2abd2d415"
+    },
+    "expected" : {
+      "purchaseCount" : 1,
+      "stock" : 3,
+      "workerABlockedWorkerB" : true
+    },
+    "observed" : {
+      "replayedB" : true,
+      "replayedA" : false,
+      "purchaseIdB" : "6cf72b2c-3cac-4731-9858-f7e6cae4ddaf",
+      "purchaseIdA" : "6cf72b2c-3cac-4731-9858-f7e6cae4ddaf",
+      "finalStock" : 3,
+      "observedBlocking" : true,
+      "blockingPidList" : [ 61 ],
+      "workerBPid" : 62,
+      "workerAPid" : 61
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "ID4",
+    "description" : "Scope and new key isolation across 3 distinct requests",
+    "expected" : {
+      "idempotencyCount" : 3,
+      "purchaseCount" : 3,
+      "stock" : 7
+    },
+    "observed" : {
+      "stock" : 7,
+      "pId3" : "752f5947-7f12-4e6d-8cbc-5eb3fe76a692",
+      "pId2" : "85fd79c5-8d09-4cc6-a268-c625eb82f88b",
+      "pId1" : "c1b9af45-6fdf-4aae-95d6-98bcd0d1ab73",
+      "purchaseCount" : 3
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "ID5",
+    "description" : "SQL error after stock decrement rolls back claim and allows clean retry",
+    "expected" : {
+      "stockAfterRetry" : 3,
+      "stockAfterRollback" : 5,
+      "sqlState" : "23514"
+    },
+    "observed" : {
+      "purchaseCountAfterRetry" : 1,
+      "stockAfterRetry" : 3,
+      "observedSqlState" : "23514",
+      "stockAfterRollback" : 5
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "ID6",
+    "description" : "Replay of terminal NOT_AVAILABLE is preserved after restock; new key succeeds",
+    "expected" : {
+      "conservationTotal" : 5,
+      "newKeyOutcome" : "SUCCESS",
+      "replayOutcome" : "NOT_AVAILABLE"
+    },
+    "observed" : {
+      "newKeyResult" : "SUCCESS",
+      "totalSold" : 2,
+      "replayFlag" : true,
+      "finalStock" : 3,
+      "replayResult" : "NOT_AVAILABLE"
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "ID7",
+    "description" : "Outer transaction rollback rolls back inner claim and allows retry",
+    "expected" : {
+      "retrySuccess" : true,
+      "stockAfterRetry" : 3,
+      "stockAfterRollback" : 5
+    },
+    "observed" : {
+      "purchaseCountAfterRetry" : 1,
+      "stockAfterRetry" : 3,
+      "stockAfterRollback" : 5
+    },
+    "assertionsPassed" : true
+  } ]
+}

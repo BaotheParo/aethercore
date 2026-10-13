@@ -1,0 +1,181 @@
+{
+  "runId" : "prompt19-20261013-210040-b68afb",
+  "environment" : "Spring Boot 3.3.4 / Hibernate 6.5.3.Final / PostgreSQL 16.15",
+  "timestamp" : "2026-10-13T14:00:56.736847500Z",
+  "scenarios" : [ {
+    "caseId" : "NQ1",
+    "datasetId" : "D1",
+    "strategy" : "Baseline N+1",
+    "orderCount" : 6,
+    "distinctBuyerCount" : 6,
+    "preparedStatementsAfterRootQuery" : 1,
+    "preparedStatementsAfterMapping" : 7,
+    "sqlStatements" : [ "select fo1_0.id,fo1_0.buyer_id,fo1_0.quantity from fetch_order fo1_0 order by fo1_0.id", "select fb1_0.id,fb1_0.name from fetch_buyer fb1_0 where fb1_0.id=?", "select fb1_0.id,fb1_0.name from fetch_buyer fb1_0 where fb1_0.id=?", "select fb1_0.id,fb1_0.name from fetch_buyer fb1_0 where fb1_0.id=?", "select fb1_0.id,fb1_0.name from fetch_buyer fb1_0 where fb1_0.id=?", "select fb1_0.id,fb1_0.name from fetch_buyer fb1_0 where fb1_0.id=?", "select fb1_0.id,fb1_0.name from fetch_buyer fb1_0 where fb1_0.id=?" ],
+    "resultRows" : [ {
+      "orderId" : 101,
+      "buyerName" : "Buyer-1",
+      "quantity" : 1
+    }, {
+      "orderId" : 102,
+      "buyerName" : "Buyer-2",
+      "quantity" : 2
+    }, {
+      "orderId" : 103,
+      "buyerName" : "Buyer-3",
+      "quantity" : 3
+    }, {
+      "orderId" : 104,
+      "buyerName" : "Buyer-4",
+      "quantity" : 4
+    }, {
+      "orderId" : 105,
+      "buyerName" : "Buyer-5",
+      "quantity" : 5
+    }, {
+      "orderId" : 106,
+      "buyerName" : "Buyer-6",
+      "quantity" : 6
+    } ],
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "NQ2",
+    "datasetId" : "D1",
+    "strategy" : "JOIN FETCH",
+    "orderCount" : 6,
+    "distinctBuyerCount" : 6,
+    "preparedStatementsAfterRootQuery" : 1,
+    "preparedStatementsAfterMapping" : 1,
+    "sqlStatements" : [ "select fo1_0.id,fo1_0.buyer_id,b1_0.id,b1_0.name,fo1_0.quantity from fetch_order fo1_0 join fetch_buyer b1_0 on b1_0.id=fo1_0.buyer_id order by fo1_0.id" ],
+    "resultRows" : [ {
+      "orderId" : 101,
+      "buyerName" : "Buyer-1",
+      "quantity" : 1
+    }, {
+      "orderId" : 102,
+      "buyerName" : "Buyer-2",
+      "quantity" : 2
+    }, {
+      "orderId" : 103,
+      "buyerName" : "Buyer-3",
+      "quantity" : 3
+    }, {
+      "orderId" : 104,
+      "buyerName" : "Buyer-4",
+      "quantity" : 4
+    }, {
+      "orderId" : 105,
+      "buyerName" : "Buyer-5",
+      "quantity" : 5
+    }, {
+      "orderId" : 106,
+      "buyerName" : "Buyer-6",
+      "quantity" : 6
+    } ],
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "NQ3",
+    "datasetId" : "D1",
+    "strategy" : "Dynamic EntityGraph",
+    "orderCount" : 6,
+    "distinctBuyerCount" : 6,
+    "preparedStatementsAfterRootQuery" : 1,
+    "preparedStatementsAfterMapping" : 1,
+    "sqlStatements" : [ "select fo1_0.id,fo1_0.buyer_id,b1_0.id,b1_0.name,fo1_0.quantity from fetch_order fo1_0 join fetch_buyer b1_0 on b1_0.id=fo1_0.buyer_id order by fo1_0.id" ],
+    "resultRows" : [ {
+      "orderId" : 101,
+      "buyerName" : "Buyer-1",
+      "quantity" : 1
+    }, {
+      "orderId" : 102,
+      "buyerName" : "Buyer-2",
+      "quantity" : 2
+    }, {
+      "orderId" : 103,
+      "buyerName" : "Buyer-3",
+      "quantity" : 3
+    }, {
+      "orderId" : 104,
+      "buyerName" : "Buyer-4",
+      "quantity" : 4
+    }, {
+      "orderId" : 105,
+      "buyerName" : "Buyer-5",
+      "quantity" : 5
+    }, {
+      "orderId" : 106,
+      "buyerName" : "Buyer-6",
+      "quantity" : 6
+    } ],
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "NQ4",
+    "datasetId" : "D1",
+    "strategy" : "JPQL Constructor Projection",
+    "orderCount" : 6,
+    "distinctBuyerCount" : 6,
+    "preparedStatementsAfterRootQuery" : 1,
+    "preparedStatementsAfterMapping" : 1,
+    "sqlStatements" : [ "select fo1_0.id,b1_0.name,fo1_0.quantity from fetch_order fo1_0 join fetch_buyer b1_0 on b1_0.id=fo1_0.buyer_id order by fo1_0.id" ],
+    "resultRows" : [ {
+      "orderId" : 101,
+      "buyerName" : "Buyer-1",
+      "quantity" : 1
+    }, {
+      "orderId" : 102,
+      "buyerName" : "Buyer-2",
+      "quantity" : 2
+    }, {
+      "orderId" : 103,
+      "buyerName" : "Buyer-3",
+      "quantity" : 3
+    }, {
+      "orderId" : 104,
+      "buyerName" : "Buyer-4",
+      "quantity" : 4
+    }, {
+      "orderId" : 105,
+      "buyerName" : "Buyer-5",
+      "quantity" : 5
+    }, {
+      "orderId" : 106,
+      "buyerName" : "Buyer-6",
+      "quantity" : 6
+    } ],
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "NQ5",
+    "datasetId" : "D2",
+    "strategy" : "Baseline N+1 with First-Level Cache",
+    "orderCount" : 6,
+    "distinctBuyerCount" : 3,
+    "preparedStatementsAfterRootQuery" : 1,
+    "preparedStatementsAfterMapping" : 4,
+    "sqlStatements" : [ "select fo1_0.id,fo1_0.buyer_id,fo1_0.quantity from fetch_order fo1_0 order by fo1_0.id", "select fb1_0.id,fb1_0.name from fetch_buyer fb1_0 where fb1_0.id=?", "select fb1_0.id,fb1_0.name from fetch_buyer fb1_0 where fb1_0.id=?", "select fb1_0.id,fb1_0.name from fetch_buyer fb1_0 where fb1_0.id=?" ],
+    "resultRows" : [ {
+      "orderId" : 101,
+      "buyerName" : "Buyer-1",
+      "quantity" : 1
+    }, {
+      "orderId" : 102,
+      "buyerName" : "Buyer-1",
+      "quantity" : 2
+    }, {
+      "orderId" : 103,
+      "buyerName" : "Buyer-2",
+      "quantity" : 3
+    }, {
+      "orderId" : 104,
+      "buyerName" : "Buyer-2",
+      "quantity" : 4
+    }, {
+      "orderId" : 105,
+      "buyerName" : "Buyer-3",
+      "quantity" : 5
+    }, {
+      "orderId" : 106,
+      "buyerName" : "Buyer-3",
+      "quantity" : 6
+    } ],
+    "assertionsPassed" : true
+  } ]
+}

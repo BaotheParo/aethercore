@@ -850,5 +850,155 @@ class TestEvidenceCollector(unittest.TestCase):
             )
         self.assertIn("returnedIds must have exactly 200 elements", str(cm.exception))
 
+    def test_idempotency_observations_payload_validation(self):
+        obs_dir = os.path.join(self.temp_dir, "idempotency_test")
+        os.makedirs(obs_dir, exist_ok=True)
+        file_path = os.path.join(obs_dir, "idempotency-observations.json")
+
+        valid_payload = {
+            "schemaVersion": "1.0.0",
+            "runId": "run-idem",
+            "timestamp": "2026-10-13T10:00:00Z",
+            "scenarios": [
+                {
+                    "caseId": "ID1",
+                    "description": "Sequential replay",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "stock": 3,
+                        "purchaseCount": 1,
+                        "purchaseId1": "p-1",
+                        "purchaseId2": "p-1",
+                        "replayed1": False,
+                        "replayed2": True
+                    }
+                },
+                {
+                    "caseId": "ID2",
+                    "description": "Key reuse",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "exQtyThrown": "IdempotencyConflictException",
+                        "exSkuThrown": "IdempotencyConflictException",
+                        "finalStock": 4,
+                        "purchaseCount": 1
+                    }
+                },
+                {
+                    "caseId": "ID3",
+                    "description": "Concurrent lock wait",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "workerAPid": 101,
+                        "workerBPid": 102,
+                        "observedBlocking": True,
+                        "blockingPidList": [101],
+                        "purchaseIdA": "p-3",
+                        "purchaseIdB": "p-3"
+                    }
+                },
+                {
+                    "caseId": "ID4",
+                    "description": "Scope isolation",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "stock": 7,
+                        "purchaseCount": 3,
+                        "pId1": "p-4a",
+                        "pId2": "p-4b",
+                        "pId3": "p-4c"
+                    }
+                },
+                {
+                    "caseId": "ID5",
+                    "description": "SQL error rollback",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "observedSqlState": "23514",
+                        "stockAfterRollback": 5,
+                        "stockAfterRetry": 3,
+                        "purchaseCountAfterRetry": 1
+                    }
+                },
+                {
+                    "caseId": "ID6",
+                    "description": "Replay NOT_AVAILABLE after restock",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "replayResult": "NOT_AVAILABLE",
+                        "replayFlag": True,
+                        "newKeyResult": "SUCCESS",
+                        "finalStock": 3,
+                        "totalSold": 2
+                    }
+                },
+                {
+                    "caseId": "ID7",
+                    "description": "Outer tx rollback",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "stockAfterRollback": 5,
+                        "stockAfterRetry": 3,
+                        "purchaseCountAfterRetry": 1
+                    }
+                }
+            ]
+        }
+
+        # 1. Valid payload passes
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(valid_payload, f)
+
+        validated = self.collector.validate_observations(
+            obs_dir,
+            run_id="run-idem",
+            required_sets={"idempotency-observations.json": [f"ID{i}" for i in range(1, 8)]}
+        )
+        self.assertEqual(validated, ["idempotency-observations.json"])
+
+        # 2. ID3 observedBlocking False raises
+        corrupted = copy.deepcopy(valid_payload)
+        corrupted["scenarios"][2]["observed"]["observedBlocking"] = False
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(corrupted, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-idem",
+                required_sets={"idempotency-observations.json": [f"ID{i}" for i in range(1, 8)]}
+            )
+        self.assertIn("observedBlocking must be True", str(cm.exception))
+
+        # 3. ID5 wrong SQLSTATE raises
+        corrupted = copy.deepcopy(valid_payload)
+        corrupted["scenarios"][4]["observed"]["observedSqlState"] = "42P01"
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(corrupted, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-idem",
+                required_sets={"idempotency-observations.json": [f"ID{i}" for i in range(1, 8)]}
+            )
+        self.assertIn("observedSqlState must be '23514'", str(cm.exception))
+
+        # 4. ID6 conservation violated raises
+        corrupted = copy.deepcopy(valid_payload)
+        corrupted["scenarios"][5]["observed"]["finalStock"] = 4
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(corrupted, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-idem",
+                required_sets={"idempotency-observations.json": [f"ID{i}" for i in range(1, 8)]}
+            )
+        self.assertIn("stock conservation violated", str(cm.exception))
+
+
 if __name__ == '__main__':
     unittest.main()

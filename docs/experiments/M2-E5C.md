@@ -38,19 +38,18 @@ CREATE TABLE predicate_trade (
 );
 ```
 
-Dataset chuẩn hóa gồm **100.001 dòng** dữ liệu xác định:
-- Dòng 1 đến 100: Tiền tố `Redstone-000001` đến `Redstone-000100` (khớp cả prefix và contains).
-- Dòng 101 đến 200: Chứa chuỗi `Mid-Redstone-000101` đến `Mid-Redstone-000200` (chỉ khớp contains).
-- Dòng 50.000: `Redstone-050000` (chữ hoa/thường chuẩn).
-- Dòng 100.001: `rEdStOnE-050000` (mixed case: xen kẽ hoa thường).
-- Các dòng còn lại: `Trade-000201` đến `Trade-100000`.
+Dataset chuẩn hóa gồm **100.001 dòng** dữ liệu xác định (tạo theo quy tắc `g` từ 1 đến 100.000 trong PostgreSQL seed):
+- `g % 1000 = 0`: Tiền tố `Redstone-<06d>` (100 dòng: IDs `1000, 2000, ..., 100000`, khớp cả prefix và contains).
+- `g % 1000 = 1`: Hậu tố `Guild-<06d>-Redstone` (100 dòng: IDs `1, 1001, 2001, ..., 99001`, chỉ khớp contains).
+- Còn lại: `Guild-<06d>` (99.800 dòng).
+- Dòng bổ sung ID 100001: `rEdStOnE-050000` (mixed case xen kẽ hoa thường, có giá trị chữ thường trùng với ID 50000 `Redstone-050000`).
 
 ### Khế ước và Oracle kết quả:
 
 | Case ID | Khế ước truy vấn (SQL Predicate) | Oracle Expected IDs | Mục tiêu kỹ thuật |
 |---|---|---|---|
-| **IP1** | `WHERE display_name LIKE 'Redstone-%'` | 100 IDs `[1..100]` | So sánh đường truy cập trước và sau khi có B-tree index `idx_pt_name`. |
-| **IP2** | `WHERE display_name LIKE '%Redstone%'` | 200 IDs `[1..200]` | Kiểm chứng chỉ mục B-tree thông thường không thể tạo seek range cho wildcard ở đầu. |
+| **IP1** | `WHERE display_name LIKE 'Redstone-%'` | 100 IDs `[1000, 2000, ..., 100000]` | So sánh đường truy cập trước và sau khi có B-tree index `idx_pt_name`. |
+| **IP2** | `WHERE display_name LIKE '%Redstone%'` | 200 IDs (IDs có `g % 1000 == 0` hoặc `1`) | Kiểm chứng chỉ mục B-tree thông thường không thể tạo seek range cho wildcard ở đầu trong ca này. |
 | **IP3** | `WHERE lower(display_name) = 'redstone-050000'` | 2 IDs `[50000, 100001]` | Chứng minh hàm bọc trên cột làm vô hiệu hóa index giá trị gốc `idx_pt_name`. |
 | **IP4** | `WHERE lower(display_name) = 'redstone-050000'` | 2 IDs `[50000, 100001]` | Chứng minh Expression Index `idx_pt_lower_name` phục hồi index lookup chính xác. |
 
@@ -73,7 +72,7 @@ Số liệu đo đạc trực tiếp từ suite `PostgresPredicateIndexExperimen
 
 ### Nhận xét định lượng cốt lõi:
 1. **IP1 (Prefix):** Khi có chỉ mục B-tree `idx_pt_name`, số lượng buffer hits giảm từ **2.326 xuống 104 blocks** (giảm 22,4 lần), thời gian thực thi giảm từ **6,480 ms xuống 0,113 ms** (tăng tốc ~57 lần).
-2. **IP2 (Contains):** Dù `idx_pt_name` tồn tại trong schema, planner vẫn buộc phải chọn `Seq Scan` vì wildcard đứng đầu `%Redstone%` không có điểm bắt đầu để định vị trên cây B-tree.
+2. **IP2 (Contains):** Dù `idx_pt_name` tồn tại trong schema, planner chọn `Seq Scan` vì trong ca này wildcard đứng đầu `%Redstone%` không tạo được prefix range seek hữu ích trên cây B-tree thông thường (lưu ý: điều này không suy ra PostgreSQL luôn bắt buộc Seq Scan cho mọi truy vấn contains LIKE trên mọi dataset/cấu hình). Tỷ lệ thời gian đo được phản ánh phép đo lab đơn lẻ, không đại diện cho thông lượng (throughput) môi trường production.
 3. **IP3 (Function vs Index):** Chỉ mục `idx_pt_name` hoàn toàn bị bỏ qua khi cột bị bọc bởi hàm `lower()`. Node `Seq Scan` phải đọc toàn bộ 100.001 dòng và tính toán hàm `lower()` trên từng dòng, mất **12,926 ms**.
 4. **IP4 (Expression Index):** Khi tạo chỉ mục chuyên biệt `idx_pt_lower_name(lower(display_name))`, query phục hồi đường truy cập `Index Scan`. Buffer hits giảm ngoạn mục từ **2.326 xuống chỉ còn 5 blocks** (giảm 465 lần), thời gian thực thi giảm xuống **0,021 ms** (tăng tốc ~615 lần).
 

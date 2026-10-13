@@ -17,7 +17,7 @@
 Trong phiên này, các hoàn thiện kỹ thuật cho bài lab Keyset Pagination (Prompt 17) đã được triển khai đầy đủ:
 
 1. **Oracle độc lập trong KP1:**
-   - Thay thế việc copy kết quả từ OFFSET sang con trỏ Keyset bằng danh sách Oracle mong đợi độc lập:
+   - Thay thế việc gán expectedIds của Keyset từ kết quả của OFFSET bằng danh sách Oracle mong đợi độc lập (con trỏ cursor vẫn được lấy độc lập từ bản ghi biên ID 20001 theo đúng phương pháp seek):
      - Trang đầu (`OFFSET 0`): `[100000, 99999, ..., 99981]` (20 IDs).
      - Trang sâu (`OFFSET 80000` và `Keyset Seek`): `[20000, 19999, ..., 19981]` (20 IDs).
    - Thêm các assertion nghiêm ngặt về projection (`payload`, `created_at`, `buyer_id = 42`).
@@ -48,11 +48,10 @@ CREATE TABLE predicate_trade (
 ```
 
 ### 2.2. Fixture 100.001 Dòng Dữ Liệu Xác Định
-- 1..100: Tiền tố `Redstone-000001` .. `Redstone-000100` (khớp prefix và contains).
-- 101..200: Chứa chuỗi `Mid-Redstone-000101` .. `Mid-Redstone-000200` (chỉ khớp contains).
-- 50.000: `Redstone-050000` (chữ hoa/thường chuẩn).
-- 100.001: `rEdStOnE-050000` (mixed-case xen kẽ).
-- Các dòng còn lại: `Trade-000201` .. `Trade-100000`.
+- `g % 1000 = 0`: Tiền tố `Redstone-<06d>` (100 dòng: IDs `1000, 2000, ..., 100000`, khớp prefix và contains).
+- `g % 1000 = 1`: Hậu tố `Guild-<06d>-Redstone` (100 dòng: IDs `1, 1001, 2001, ..., 99001`, chỉ khớp contains).
+- Còn lại: `Guild-<06d>` (99.800 dòng).
+- ID 100001: `rEdStOnE-050000` (mixed-case xen kẽ, cùng giá trị chữ thường với ID 50000 `Redstone-050000`).
 
 ### 2.3. Bốn Kịch Bản Thực Nghiệm (IP1..IP4)
 Triển khai trong `PostgresPredicateIndexExperimentsTest.java`:
@@ -60,7 +59,7 @@ Triển khai trong `PostgresPredicateIndexExperimentsTest.java`:
    - Trước index (`prefix_no_index`): `Seq Scan` trên `predicate_trade`, Cost 3576.01, 100 rows, 2.326 buffer hits, 6,480 ms.
    - Sau khi tạo `idx_pt_name` (`prefix_btree`): `Index Scan` trên `idx_pt_name`, Cost 8.44, 100 rows, 104 buffer hits, 0,113 ms. PostgreSQL tự động biến đổi thành `Index Cond: ((display_name >= 'Redstone-') AND (display_name < 'Redstone.'))`.
 2. **IP2 (Contains LIKE `%Redstone%`):**
-   - Với `idx_pt_name`: Ordinary B-tree không thể định vị seek range cho leading wildcard `%`. Kế hoạch thực thi là `Seq Scan` với Filter `(display_name ~~ '%Redstone%')`, Cost 3576.01, 200 rows, 2.326 buffer hits, 7,358 ms.
+   - Với `idx_pt_name`: Ordinary B-tree không tạo được prefix range seek hữu ích cho leading wildcard `%` trong ca này. Kế hoạch thực thi là `Seq Scan` với Filter `(display_name ~~ '%Redstone%')`, Cost 3576.01, 200 rows, 2.326 buffer hits, 7,358 ms (phản ánh kết quả quan sát trên dataset này, không khái quát hóa cho mọi query/dataset).
 3. **IP3 (lower(display_name) = ? với Ordinary Index):**
    - Với `idx_pt_name`: B-tree index trên cột gốc bị bỏ qua. Kế hoạch là `Seq Scan` với Filter `(lower(display_name) = 'redstone-050000')`, Cost 3826.01, 2 rows (`[50000, 100001]`), 2.326 buffer hits, 12,926 ms.
    - Semantics control: Truy vấn `WHERE display_name = 'redstone-050000'` trả về 0 rows, chứng minh việc bỏ `lower()` làm mất dữ liệu.

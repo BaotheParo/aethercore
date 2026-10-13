@@ -140,7 +140,8 @@ class EvidenceCollector:
                 'pagination-observations.json': [f"PG{i}" for i in range(1, 6)],
                 'query-plan-observations.json': [f"EP{i}" for i in range(1, 5)],
                 'keyset-pagination-observations.json': [f"KP{i}" for i in range(1, 5)],
-                'predicate-index-observations.json': [f"IP{i}" for i in range(1, 5)]
+                'predicate-index-observations.json': [f"IP{i}" for i in range(1, 5)],
+                'idempotency-observations.json': [f"ID{i}" for i in range(1, 8)]
             }
 
         validated = []
@@ -188,6 +189,8 @@ class EvidenceCollector:
                 # Special validation for predicate index observations (Prompt 18)
                 elif filename == 'predicate-index-observations.json':
                     self._validate_predicate_index_scenario(case_id, s)
+                elif filename == 'idempotency-observations.json':
+                    self._validate_idempotency_scenario(case_id, s)
 
             for exp in expected_cases:
                 if exp not in found_cases:
@@ -536,6 +539,70 @@ class EvidenceCollector:
             if not isinstance(exp_ids, list) or exp_ids != ret_ids:
                 raise ValidationError("Scenario IP4 expectedIds must match returnedIds")
 
+    def _validate_idempotency_scenario(self, case_id, s):
+        for req_field in ["caseId", "description", "expected", "observed", "assertionsPassed"]:
+            if req_field not in s:
+                raise ValidationError(f"Scenario {case_id} missing required field '{req_field}' in idempotency-observations.json")
+
+        if s.get("assertionsPassed") is not True:
+            raise ValidationError(f"Scenario {case_id} assertionsPassed must be True")
+
+        obs = s.get("observed")
+        if not isinstance(obs, dict):
+            raise ValidationError(f"Scenario {case_id} observed must be a dict")
+
+        if case_id == "ID1":
+            for f in ["stock", "purchaseCount", "purchaseId1", "purchaseId2", "replayed1", "replayed2"]:
+                if f not in obs:
+                    raise ValidationError(f"Scenario ID1 missing observed field '{f}'")
+            if obs.get("purchaseId1") != obs.get("purchaseId2"):
+                raise ValidationError("Scenario ID1 purchaseId1 and purchaseId2 must match")
+            if obs.get("replayed1") is not False or obs.get("replayed2") is not True:
+                raise ValidationError("Scenario ID1 replayed flags mismatch")
+        elif case_id == "ID2":
+            for f in ["exQtyThrown", "exSkuThrown", "finalStock", "purchaseCount"]:
+                if f not in obs:
+                    raise ValidationError(f"Scenario ID2 missing observed field '{f}'")
+            if obs.get("exQtyThrown") != "IdempotencyConflictException" or obs.get("exSkuThrown") != "IdempotencyConflictException":
+                raise ValidationError("Scenario ID2 conflict exceptions must be IdempotencyConflictException")
+        elif case_id == "ID3":
+            for f in ["workerAPid", "workerBPid", "observedBlocking", "blockingPidList", "purchaseIdA", "purchaseIdB"]:
+                if f not in obs:
+                    raise ValidationError(f"Scenario ID3 missing observed field '{f}'")
+            if obs.get("observedBlocking") is not True:
+                raise ValidationError("Scenario ID3 observedBlocking must be True")
+            if obs.get("purchaseIdA") != obs.get("purchaseIdB"):
+                raise ValidationError("Scenario ID3 purchaseIdA and purchaseIdB must match")
+        elif case_id == "ID4":
+            for f in ["stock", "purchaseCount", "pId1", "pId2", "pId3"]:
+                if f not in obs:
+                    raise ValidationError(f"Scenario ID4 missing observed field '{f}'")
+            pids = [obs.get("pId1"), obs.get("pId2"), obs.get("pId3")]
+            if len(set(pids)) != 3:
+                raise ValidationError("Scenario ID4 purchases must have 3 distinct IDs")
+        elif case_id == "ID5":
+            for f in ["observedSqlState", "stockAfterRollback", "stockAfterRetry"]:
+                if f not in obs:
+                    raise ValidationError(f"Scenario ID5 missing observed field '{f}'")
+            if obs.get("observedSqlState") != "23514":
+                raise ValidationError(f"Scenario ID5 observedSqlState must be '23514', got '{obs.get('observedSqlState')}'")
+            if obs.get("stockAfterRollback") != 5 or obs.get("stockAfterRetry") != 3:
+                raise ValidationError("Scenario ID5 stock transition mismatch")
+        elif case_id == "ID6":
+            for f in ["replayResult", "replayFlag", "newKeyResult", "finalStock", "totalSold"]:
+                if f not in obs:
+                    raise ValidationError(f"Scenario ID6 missing observed field '{f}'")
+            if obs.get("replayResult") != "NOT_AVAILABLE" or obs.get("newKeyResult") != "SUCCESS":
+                raise ValidationError("Scenario ID6 outcomes mismatch")
+            if obs.get("finalStock") + obs.get("totalSold") != 5:
+                raise ValidationError("Scenario ID6 stock conservation violated")
+        elif case_id == "ID7":
+            for f in ["stockAfterRollback", "stockAfterRetry", "purchaseCountAfterRetry"]:
+                if f not in obs:
+                    raise ValidationError(f"Scenario ID7 missing observed field '{f}'")
+            if obs.get("stockAfterRollback") != 5 or obs.get("stockAfterRetry") != 3:
+                raise ValidationError("Scenario ID7 stock transition mismatch")
+
     def generate_summary_text(self, core_res, backend_res, meta):
         total_core = core_res['total_tests']
         core_failures = core_res['total_failures']
@@ -724,6 +791,7 @@ REACTOR TOTAL: {total_reactor} Tests Run | {total_failures} Failures | {total_er
         backend_res = self.parse_surefire_reports(backend_reports)
 
         # Validate observations in staging_dir
+
         validated_obs = self.validate_observations(staging_dir, run_id=run_id)
         meta["observationsValidated"] = validated_obs
 

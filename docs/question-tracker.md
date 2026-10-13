@@ -66,6 +66,11 @@
 | **SQL45** | Hàm trên cột lower() làm vô hiệu hóa index và cách giải quyết bằng Expression Index | M2-E5C (IP3 Seq Scan khi dùng lower(col) vs IP4 Index Scan với idx_pt_lower_name; semantics control 0 rows khi bỏ lower; chưa làm implicit cast) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
 | **SQL46** | EXPLAIN; estimated rows vs actual | M2-E5A (EP1..EP4), M2-E5B (KP1) & M2-E5C (IP1..IP4 so sánh Plan Rows vs Actual Rows, Index Cond range vs Filter re-check, và raw execution trees) | FULL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
 | **SQL47** | Đọc EXPLAIN ANALYZE tìm bước tốn thời gian | M2-E5A, M2-E5B & M2-E5C (IP1..IP4 phân tích Actual Rows vs Rows Removed by Filter 99999, Shared Hit Blocks; lưu ý TIMING OFF không đo thời gian từng node riêng) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **H02** | POST timeout rồi gửi lại; biết request đầu đã tạo tác vụ chưa | M2-E6A IdempotentMarketPurchaseService (ID1 replay sau khi commit mô phỏng mất response; mô hình retry ở tầng service, chưa test HTTP/network) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **H03** | Idempotency key; lưu và kiểm tra để tránh tạo hai tác vụ | M2-E6A (ID1..ID7 lưu scope (caller, op, key) + canonical SHA-256 fingerprint, chặn double purchase, DB unique lock wait) | FULL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **H04** | 200/201/202 cho tác vụ nền và tra cứu tiến độ | M2-E6A (Chưa triển khai async/polling API trong phiên này) | NOT_COVERED | - | `AWAITING_CANDIDATE` | - |
+| **SB42** | Phân biệt 400/401/403/404/409/422/500 | M2-E6A (Ném IdempotencyConflictException nội bộ, chưa map HTTP status codes ở controller) | NOT_COVERED | - | `AWAITING_CANDIDATE` | - |
+| **SB43** | API tạo tài nguyên an toàn khi request gửi lại | M2-E6A (ID1..ID7 transactional claim & replay logic đã kiểm chứng chặt chẽ, API end-to-end chưa có) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
 
 ---
 
