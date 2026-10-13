@@ -1,3 +1,4 @@
+import copy
 import os
 import sys
 import json
@@ -527,6 +528,7 @@ class TestEvidenceCollector(unittest.TestCase):
                     "pageSize": 20,
                     "assertionsPassed": True,
                     "deepPagesEqual": True,
+                    "expectedIds": list(range(20)),
                     "returnedIds": {
                         "firstPage": list(range(20)),
                         "deepOffset": list(range(20)),
@@ -587,6 +589,7 @@ class TestEvidenceCollector(unittest.TestCase):
                     "pageSize": 20,
                     "assertionsPassed": True,
                     "deepPagesEqual": True,
+                    "expectedIds": list(range(20)),
                     "returnedIds": {
                         "firstPage": list(range(20)),
                         "deepOffset": list(range(20)),
@@ -640,6 +643,212 @@ class TestEvidenceCollector(unittest.TestCase):
             required_sets={"keyset-pagination-observations.json": ["KP1", "KP2", "KP3", "KP4"]}
         )
         self.assertEqual(validated, ["keyset-pagination-observations.json"])
+
+
+    def test_actual_metrics_missing_rows_or_loops_raises(self):
+        obs_dir = os.path.join(self.temp_dir, "missing_actuals")
+        os.makedirs(obs_dir, exist_ok=True)
+        qp_file = os.path.join(obs_dir, "query-plan-observations.json")
+
+        base_plan = {
+            "schemaVersion": "1.0.0",
+            "runId": "run-actuals",
+            "timestamp": "2026-10-13T10:00:00Z",
+            "scenarios": [
+                {
+                    "caseId": "EP1",
+                    "queryId": "Q1",
+                    "sqlTemplate": "SELECT ...",
+                    "params": {},
+                    "actualIndexInventory": [],
+                    "resultSummary": {"rowCount": 10, "validationPassed": True},
+                    "nodeSummaries": [{"nodeType": "Seq Scan"}],
+                    "rootMetrics": {},
+                    "hypothesis": "Hypothesis",
+                    "hypothesisStatus": "MATCHED",
+                    "assertionsPassed": True,
+                    "rawExplainOnlyJson": [{"Plan": {"Node Type": "Seq Scan"}}],
+                    "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Seq Scan"}}] # Missing both
+                }
+            ]
+        }
+
+        # 1. Missing both raises
+        with open(qp_file, "w", encoding="utf-8") as f:
+            json.dump(base_plan, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-actuals",
+                required_sets={"query-plan-observations.json": ["EP1"]}
+            )
+        self.assertIn("both 'Actual Rows' and 'Actual Loops'", str(cm.exception))
+
+        # 2. Missing Actual Rows only raises
+        base_plan["scenarios"][0]["rawExplainAnalyzeJson"] = [{"Plan": {"Node Type": "Seq Scan", "Actual Loops": 1}}]
+        with open(qp_file, "w", encoding="utf-8") as f:
+            json.dump(base_plan, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-actuals",
+                required_sets={"query-plan-observations.json": ["EP1"]}
+            )
+        self.assertIn("both 'Actual Rows' and 'Actual Loops'", str(cm.exception))
+
+        # 3. Missing Actual Loops only raises
+        base_plan["scenarios"][0]["rawExplainAnalyzeJson"] = [{"Plan": {"Node Type": "Seq Scan", "Actual Rows": 10}}]
+        with open(qp_file, "w", encoding="utf-8") as f:
+            json.dump(base_plan, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-actuals",
+                required_sets={"query-plan-observations.json": ["EP1"]}
+            )
+        self.assertIn("both 'Actual Rows' and 'Actual Loops'", str(cm.exception))
+
+        # 4. Both present passes
+        base_plan["scenarios"][0]["rawExplainAnalyzeJson"] = [{"Plan": {"Node Type": "Seq Scan", "Actual Rows": 10, "Actual Loops": 1}}]
+        with open(qp_file, "w", encoding="utf-8") as f:
+            json.dump(base_plan, f)
+        validated = self.collector.validate_observations(
+            obs_dir, run_id="run-actuals",
+            required_sets={"query-plan-observations.json": ["EP1"]}
+        )
+        self.assertEqual(validated, ["query-plan-observations.json"])
+
+    def test_predicate_index_observations_payload_validation(self):
+        obs_dir = os.path.join(self.temp_dir, "predicate_test")
+        os.makedirs(obs_dir, exist_ok=True)
+        pred_file = os.path.join(obs_dir, "predicate-index-observations.json")
+
+        valid_pred = {
+            "schemaVersion": "1.0.0",
+            "runId": "run-pred",
+            "timestamp": "2026-10-13T10:00:00Z",
+            "scenarios": [
+                {
+                    "caseId": "IP1",
+                    "description": "Prefix LIKE before and after B-tree",
+                    "assertionsPassed": True,
+                    "expectedIds": list(range(100)),
+                    "returnedIds": {
+                        "prefixNoIndex": list(range(100)),
+                        "prefixBTree": list(range(100))
+                    },
+                    "measurements": {
+                        "prefix_no_index": {
+                            "sql": "SELECT ...",
+                            "params": {"pattern": "Redstone-%"},
+                            "returnedIds": list(range(100)),
+                            "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Seq Scan", "Actual Rows": 100, "Actual Loops": 1}}],
+                            "report": {}
+                        },
+                        "prefix_btree": {
+                            "sql": "SELECT ...",
+                            "params": {"pattern": "Redstone-%"},
+                            "returnedIds": list(range(100)),
+                            "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Bitmap Heap Scan", "Actual Rows": 100, "Actual Loops": 1}}],
+                            "report": {}
+                        }
+                    }
+                },
+                {
+                    "caseId": "IP2",
+                    "description": "Contains LIKE with ordinary B-tree",
+                    "assertionsPassed": True,
+                    "expectedIds": list(range(200)),
+                    "returnedIds": list(range(200)),
+                    "measurements": {
+                        "contains_like": {
+                            "sql": "SELECT ...",
+                            "params": {"pattern": "%Redstone%"},
+                            "returnedIds": list(range(200)),
+                            "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Seq Scan", "Actual Rows": 200, "Actual Loops": 1}}],
+                            "report": {}
+                        }
+                    }
+                },
+                {
+                    "caseId": "IP3",
+                    "description": "lower(column) with ordinary index",
+                    "assertionsPassed": True,
+                    "expectedIds": [50000, 100001],
+                    "returnedIds": [50000, 100001],
+                    "rawEqualityReturnedIds": [],
+                    "measurements": {
+                        "lower_ordinary_index": {
+                            "sql": "SELECT ...",
+                            "params": {"value": "redstone-050000"},
+                            "returnedIds": [50000, 100001],
+                            "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Seq Scan", "Actual Rows": 2, "Actual Loops": 1}}],
+                            "report": {}
+                        }
+                    }
+                },
+                {
+                    "caseId": "IP4",
+                    "description": "lower(column) with expression index",
+                    "assertionsPassed": True,
+                    "expectedIds": [50000, 100001],
+                    "returnedIds": [50000, 100001],
+                    "measurements": {
+                        "lower_expression_index": {
+                            "sql": "SELECT ...",
+                            "params": {"value": "redstone-050000"},
+                            "returnedIds": [50000, 100001],
+                            "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Bitmap Heap Scan", "Actual Rows": 2, "Actual Loops": 1}}],
+                            "report": {}
+                        }
+                    }
+                }
+            ]
+        }
+
+        # 1. Valid payload passes
+        with open(pred_file, "w", encoding="utf-8") as f:
+            json.dump(valid_pred, f)
+
+        validated = self.collector.validate_observations(
+            obs_dir,
+            run_id="run-pred",
+            required_sets={"predicate-index-observations.json": ["IP1", "IP2", "IP3", "IP4"]}
+        )
+        self.assertEqual(validated, ["predicate-index-observations.json"])
+
+        # 2. IP1 missing measurement raises
+        corrupted = copy.deepcopy(valid_pred)
+        del corrupted["scenarios"][0]["measurements"]["prefix_btree"]
+        with open(pred_file, "w", encoding="utf-8") as f:
+            json.dump(corrupted, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-pred",
+                required_sets={"predicate-index-observations.json": ["IP1", "IP2", "IP3", "IP4"]}
+            )
+        self.assertIn("missing required measurement 'prefix_btree'", str(cm.exception))
+
+        # 3. IP3 rawEqualityReturnedIds non-empty raises
+        corrupted = copy.deepcopy(valid_pred)
+        corrupted["scenarios"][2]["rawEqualityReturnedIds"] = [50000]
+        with open(pred_file, "w", encoding="utf-8") as f:
+            json.dump(corrupted, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-pred",
+                required_sets={"predicate-index-observations.json": ["IP1", "IP2", "IP3", "IP4"]}
+            )
+        self.assertIn("rawEqualityReturnedIds must be empty", str(cm.exception))
+
+        # 4. IP2 count mismatch raises
+        corrupted = copy.deepcopy(valid_pred)
+        corrupted["scenarios"][1]["returnedIds"] = list(range(199))
+        with open(pred_file, "w", encoding="utf-8") as f:
+            json.dump(corrupted, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-pred",
+                required_sets={"predicate-index-observations.json": ["IP1", "IP2", "IP3", "IP4"]}
+            )
+        self.assertIn("returnedIds must have exactly 200 elements", str(cm.exception))
 
 if __name__ == '__main__':
     unittest.main()

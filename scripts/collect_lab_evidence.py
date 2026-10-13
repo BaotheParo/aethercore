@@ -139,7 +139,8 @@ class EvidenceCollector:
                 'fetch-observations.json': [f"NQ{i}" for i in range(1, 6)],
                 'pagination-observations.json': [f"PG{i}" for i in range(1, 6)],
                 'query-plan-observations.json': [f"EP{i}" for i in range(1, 5)],
-                'keyset-pagination-observations.json': [f"KP{i}" for i in range(1, 5)]
+                'keyset-pagination-observations.json': [f"KP{i}" for i in range(1, 5)],
+                'predicate-index-observations.json': [f"IP{i}" for i in range(1, 5)]
             }
 
         validated = []
@@ -184,6 +185,9 @@ class EvidenceCollector:
                 # Special validation for keyset pagination observations (Prompt 17)
                 elif filename == 'keyset-pagination-observations.json':
                     self._validate_keyset_scenario(case_id, s)
+                # Special validation for predicate index observations (Prompt 18)
+                elif filename == 'predicate-index-observations.json':
+                    self._validate_predicate_index_scenario(case_id, s)
 
             for exp in expected_cases:
                 if exp not in found_cases:
@@ -288,8 +292,8 @@ class EvidenceCollector:
         if not isinstance(plan_obj, dict) or "Node Type" not in plan_obj:
             raise ValidationError(f"Scenario {case_id} rawExplainAnalyzeJson must contain Plan with 'Node Type'")
 
-        if "Actual Rows" not in plan_obj and "Actual Loops" not in plan_obj:
-            raise ValidationError(f"Scenario {case_id} rawExplainAnalyzeJson must contain actual execution metrics")
+        if "Actual Rows" not in plan_obj or "Actual Loops" not in plan_obj:
+            raise ValidationError(f"Scenario {case_id} rawExplainAnalyzeJson must contain actual execution metrics (both 'Actual Rows' and 'Actual Loops')")
 
         if case_id == "EP1":
             raw_only = s.get("rawExplainOnlyJson")
@@ -343,14 +347,31 @@ class EvidenceCollector:
                 if not isinstance(plan_obj, dict) or "Node Type" not in plan_obj:
                     raise ValidationError(f"Scenario KP1 measurement '{m_key}' rawExplainAnalyzeJson must contain Plan with 'Node Type'")
 
-                if "Actual Rows" not in plan_obj and "Actual Loops" not in plan_obj:
-                    raise ValidationError(f"Scenario KP1 measurement '{m_key}' rawExplainAnalyzeJson must contain actual execution metrics")
+                if "Actual Rows" not in plan_obj or "Actual Loops" not in plan_obj:
+                    raise ValidationError(f"Scenario KP1 measurement '{m_key}' rawExplainAnalyzeJson must contain actual execution metrics (both 'Actual Rows' and 'Actual Loops')")
 
             ret_ids = s.get("returnedIds", {})
+            first_page_ids = ret_ids.get("firstPage")
             deep_offset_ids = ret_ids.get("deepOffset")
             deep_keyset_ids = ret_ids.get("deepKeyset")
+            expected_ids = s.get("expectedIds")
+
             if not deep_offset_ids or not deep_keyset_ids or deep_offset_ids != deep_keyset_ids:
                 raise ValidationError("Scenario KP1 deepOffset IDs and deepKeyset IDs must be non-empty and strictly equal")
+
+            if not expected_ids or expected_ids != deep_offset_ids:
+                raise ValidationError("Scenario KP1 expectedIds must match deepOffset IDs")
+
+            meas_first = measurements.get("first_page", {}).get("returnedIds")
+            meas_offset = measurements.get("deep_offset", {}).get("returnedIds")
+            meas_keyset = measurements.get("deep_keyset", {}).get("returnedIds")
+
+            if meas_first != first_page_ids:
+                raise ValidationError("Scenario KP1 measurement 'first_page' returnedIds mismatch with top-level returnedIds")
+            if meas_offset != deep_offset_ids:
+                raise ValidationError("Scenario KP1 measurement 'deep_offset' returnedIds mismatch with top-level returnedIds")
+            if meas_keyset != deep_keyset_ids:
+                raise ValidationError("Scenario KP1 measurement 'deep_keyset' returnedIds mismatch with top-level returnedIds")
 
             hyp_status = s.get("hypothesisStatus")
             if hyp_status not in ["MATCHED", "DIFFERENT"]:
@@ -377,6 +398,143 @@ class EvidenceCollector:
             if s.get("keysetHasSkipped") is not False:
                 raise ValidationError("Scenario KP4 keysetHasSkipped must be False")
 
+
+    def _validate_predicate_index_scenario(self, case_id, s):
+        for req_field in ["caseId", "description", "assertionsPassed"]:
+            if req_field not in s:
+                raise ValidationError(f"Scenario {case_id} missing required field '{req_field}' in predicate-index-observations.json")
+
+        if s.get("assertionsPassed") is not True:
+            raise ValidationError(f"Scenario {case_id} assertionsPassed must be True")
+
+        if case_id == "IP1":
+            measurements = s.get("measurements")
+            if not isinstance(measurements, dict):
+                raise ValidationError("Scenario IP1 missing 'measurements' map")
+            for m_key in ["prefix_no_index", "prefix_btree"]:
+                if m_key not in measurements:
+                    raise ValidationError(f"Scenario IP1 missing required measurement '{m_key}'")
+                m = measurements[m_key]
+                for req in ["sql", "params", "returnedIds", "rawExplainAnalyzeJson", "report"]:
+                    if req not in m:
+                        raise ValidationError(f"Scenario IP1 measurement '{m_key}' missing required field '{req}'")
+
+                raw_plan = m.get("rawExplainAnalyzeJson")
+                plan_obj = None
+                if isinstance(raw_plan, list) and len(raw_plan) > 0 and isinstance(raw_plan[0], dict):
+                    plan_obj = raw_plan[0].get("Plan")
+                elif isinstance(raw_plan, dict):
+                    plan_obj = raw_plan.get("Plan")
+
+                if not isinstance(plan_obj, dict) or "Node Type" not in plan_obj:
+                    raise ValidationError(f"Scenario IP1 measurement '{m_key}' rawExplainAnalyzeJson must contain Plan with 'Node Type'")
+
+                if "Actual Rows" not in plan_obj or "Actual Loops" not in plan_obj:
+                    raise ValidationError(f"Scenario IP1 measurement '{m_key}' rawExplainAnalyzeJson must contain both 'Actual Rows' and 'Actual Loops'")
+
+            ret_ids = s.get("returnedIds", {})
+            p_no_idx = ret_ids.get("prefixNoIndex")
+            p_btree = ret_ids.get("prefixBTree")
+            exp_ids = s.get("expectedIds")
+
+            if not isinstance(p_no_idx, list) or len(p_no_idx) != 100:
+                raise ValidationError("Scenario IP1 prefixNoIndex IDs must have exactly 100 elements")
+            if not isinstance(p_btree, list) or len(p_btree) != 100:
+                raise ValidationError("Scenario IP1 prefixBTree IDs must have exactly 100 elements")
+            if p_no_idx != p_btree:
+                raise ValidationError("Scenario IP1 prefixNoIndex and prefixBTree IDs must be strictly equal")
+            if not isinstance(exp_ids, list) or exp_ids != p_no_idx:
+                raise ValidationError("Scenario IP1 expectedIds must match prefix returned IDs")
+
+        elif case_id == "IP2":
+            measurements = s.get("measurements")
+            if not isinstance(measurements, dict) or "contains_like" not in measurements:
+                raise ValidationError("Scenario IP2 missing measurement 'contains_like'")
+            m = measurements["contains_like"]
+            for req in ["sql", "params", "returnedIds", "rawExplainAnalyzeJson", "report"]:
+                if req not in m:
+                    raise ValidationError(f"Scenario IP2 measurement 'contains_like' missing required field '{req}'")
+
+            raw_plan = m.get("rawExplainAnalyzeJson")
+            plan_obj = None
+            if isinstance(raw_plan, list) and len(raw_plan) > 0 and isinstance(raw_plan[0], dict):
+                plan_obj = raw_plan[0].get("Plan")
+            elif isinstance(raw_plan, dict):
+                plan_obj = raw_plan.get("Plan")
+
+            if not isinstance(plan_obj, dict) or "Node Type" not in plan_obj:
+                raise ValidationError("Scenario IP2 rawExplainAnalyzeJson must contain Plan with 'Node Type'")
+
+            if "Actual Rows" not in plan_obj or "Actual Loops" not in plan_obj:
+                raise ValidationError("Scenario IP2 rawExplainAnalyzeJson must contain both 'Actual Rows' and 'Actual Loops'")
+
+            ret_ids = s.get("returnedIds")
+            exp_ids = s.get("expectedIds")
+            if not isinstance(ret_ids, list) or len(ret_ids) != 200:
+                raise ValidationError("Scenario IP2 returnedIds must have exactly 200 elements")
+            if not isinstance(exp_ids, list) or exp_ids != ret_ids:
+                raise ValidationError("Scenario IP2 expectedIds must match returnedIds")
+
+        elif case_id == "IP3":
+            measurements = s.get("measurements")
+            if not isinstance(measurements, dict) or "lower_ordinary_index" not in measurements:
+                raise ValidationError("Scenario IP3 missing measurement 'lower_ordinary_index'")
+            m = measurements["lower_ordinary_index"]
+            for req in ["sql", "params", "returnedIds", "rawExplainAnalyzeJson", "report"]:
+                if req not in m:
+                    raise ValidationError(f"Scenario IP3 measurement 'lower_ordinary_index' missing required field '{req}'")
+
+            raw_plan = m.get("rawExplainAnalyzeJson")
+            plan_obj = None
+            if isinstance(raw_plan, list) and len(raw_plan) > 0 and isinstance(raw_plan[0], dict):
+                plan_obj = raw_plan[0].get("Plan")
+            elif isinstance(raw_plan, dict):
+                plan_obj = raw_plan.get("Plan")
+
+            if not isinstance(plan_obj, dict) or "Node Type" not in plan_obj:
+                raise ValidationError("Scenario IP3 rawExplainAnalyzeJson must contain Plan with 'Node Type'")
+
+            if "Actual Rows" not in plan_obj or "Actual Loops" not in plan_obj:
+                raise ValidationError("Scenario IP3 rawExplainAnalyzeJson must contain both 'Actual Rows' and 'Actual Loops'")
+
+            ret_ids = s.get("returnedIds")
+            exp_ids = s.get("expectedIds")
+            raw_eq_ids = s.get("rawEqualityReturnedIds")
+            if not isinstance(ret_ids, list) or len(ret_ids) != 2:
+                raise ValidationError("Scenario IP3 returnedIds must have exactly 2 elements")
+            if not isinstance(exp_ids, list) or exp_ids != ret_ids:
+                raise ValidationError("Scenario IP3 expectedIds must match returnedIds")
+            if not isinstance(raw_eq_ids, list) or len(raw_eq_ids) != 0:
+                raise ValidationError("Scenario IP3 rawEqualityReturnedIds must be empty (0 elements)")
+
+        elif case_id == "IP4":
+            measurements = s.get("measurements")
+            if not isinstance(measurements, dict) or "lower_expression_index" not in measurements:
+                raise ValidationError("Scenario IP4 missing measurement 'lower_expression_index'")
+            m = measurements["lower_expression_index"]
+            for req in ["sql", "params", "returnedIds", "rawExplainAnalyzeJson", "report"]:
+                if req not in m:
+                    raise ValidationError(f"Scenario IP4 measurement 'lower_expression_index' missing required field '{req}'")
+
+            raw_plan = m.get("rawExplainAnalyzeJson")
+            plan_obj = None
+            if isinstance(raw_plan, list) and len(raw_plan) > 0 and isinstance(raw_plan[0], dict):
+                plan_obj = raw_plan[0].get("Plan")
+            elif isinstance(raw_plan, dict):
+                plan_obj = raw_plan.get("Plan")
+
+            if not isinstance(plan_obj, dict) or "Node Type" not in plan_obj:
+                raise ValidationError("Scenario IP4 rawExplainAnalyzeJson must contain Plan with 'Node Type'")
+
+            if "Actual Rows" not in plan_obj or "Actual Loops" not in plan_obj:
+                raise ValidationError("Scenario IP4 rawExplainAnalyzeJson must contain both 'Actual Rows' and 'Actual Loops'")
+
+            ret_ids = s.get("returnedIds")
+            exp_ids = s.get("expectedIds")
+            if not isinstance(ret_ids, list) or len(ret_ids) != 2:
+                raise ValidationError("Scenario IP4 returnedIds must have exactly 2 elements")
+            if not isinstance(exp_ids, list) or exp_ids != ret_ids:
+                raise ValidationError("Scenario IP4 expectedIds must match returnedIds")
 
     def generate_summary_text(self, core_res, backend_res, meta):
         total_core = core_res['total_tests']

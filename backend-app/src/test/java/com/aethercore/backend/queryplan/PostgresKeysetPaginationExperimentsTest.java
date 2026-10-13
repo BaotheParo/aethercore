@@ -228,6 +228,16 @@ public class PostgresKeysetPaginationExperimentsTest {
             int pageSize = 20;
             int deepOffset = 80000;
 
+            // Independent oracles generated directly from deterministic fixture formulas
+            List<Long> expectedFirstPageIds = new ArrayList<>(pageSize);
+            for (long id = 100000L; id >= 99981L; id--) {
+                expectedFirstPageIds.add(id);
+            }
+            List<Long> expectedDeepPageIds = new ArrayList<>(pageSize);
+            for (long id = 20000L; id >= 19981L; id--) {
+                expectedDeepPageIds.add(id);
+            }
+
             // 1. Measurement 1: Baseline First Page (OFFSET 0)
             List<TradeRow> firstPageRows;
             try (PreparedStatement ps = conn.prepareStatement(FIRST_PAGE_SQL)) {
@@ -237,8 +247,12 @@ public class PostgresKeysetPaginationExperimentsTest {
             }
             assertEquals(20, firstPageRows.size());
             List<Long> firstPageIds = extractIds(firstPageRows);
-            assertEquals(100000L, firstPageIds.get(0));
-            assertEquals(99981L, firstPageIds.get(19));
+            assertEquals(expectedFirstPageIds, firstPageIds, "First page must match independent oracle [100000..99981]");
+            for (TradeRow r : firstPageRows) {
+                assertEquals(42L, r.buyerId(), "First page row must belong to buyer 42");
+                assertNotNull(r.payload(), "Payload must be present");
+                assertNotNull(r.createdAt(), "CreatedAt must be present");
+            }
 
             // Explain First Page
             String explainFirstSql = "EXPLAIN (ANALYZE, BUFFERS, SETTINGS, TIMING OFF, FORMAT JSON) " + FIRST_PAGE_SQL;
@@ -263,8 +277,12 @@ public class PostgresKeysetPaginationExperimentsTest {
             }
             assertEquals(20, deepOffsetRows.size());
             List<Long> deepOffsetIds = extractIds(deepOffsetRows);
-            assertEquals(20000L, deepOffsetIds.get(0));
-            assertEquals(19981L, deepOffsetIds.get(19));
+            assertEquals(expectedDeepPageIds, deepOffsetIds, "Deep OFFSET must match independent oracle [20000..19981]");
+            for (TradeRow r : deepOffsetRows) {
+                assertEquals(42L, r.buyerId(), "Deep offset row must belong to buyer 42");
+                assertNotNull(r.payload(), "Payload must be present");
+                assertNotNull(r.createdAt(), "CreatedAt must be present");
+            }
 
             // Explain Deep OFFSET
             String explainOffsetSql = "EXPLAIN (ANALYZE, BUFFERS, SETTINGS, TIMING OFF, FORMAT JSON) " + OFFSET_SQL;
@@ -300,6 +318,12 @@ public class PostgresKeysetPaginationExperimentsTest {
             }
             assertEquals(20, deepKeysetRows.size());
             List<Long> deepKeysetIds = extractIds(deepKeysetRows);
+            assertEquals(expectedDeepPageIds, deepKeysetIds, "Deep Keyset must match independent oracle [20000..19981]");
+            for (TradeRow r : deepKeysetRows) {
+                assertEquals(42L, r.buyerId(), "Deep keyset row must belong to buyer 42");
+                assertNotNull(r.payload(), "Payload must be present");
+                assertNotNull(r.createdAt(), "CreatedAt must be present");
+            }
 
             // Verify Semantic Invariant: deep OFFSET IDs match deep Keyset IDs exactly
             assertEquals(deepOffsetIds, deepKeysetIds, "Deep OFFSET and deep Keyset must return identical IDs in the same order");
@@ -319,12 +343,27 @@ public class PostgresKeysetPaginationExperimentsTest {
             }
             ExplainPlanReader.PlanReport keysetReport = ExplainPlanReader.parse(rawExplainKeyset);
 
-            // Find actual rows delivered by scan node
-            long offsetScanRows = getScanActualRows(offsetReport);
-            long keysetScanRows = getScanActualRows(keysetReport);
+            // Inspect specific scan nodes on table 'keyset_trade'
+            ExplainPlanReader.PlanNodeSummary offsetScanNode = findTableScanNode(offsetReport, "keyset_trade");
+            ExplainPlanReader.PlanNodeSummary keysetScanNode = findTableScanNode(keysetReport, "keyset_trade");
 
-            // Hypothesis: deep offset delivers ~80,020 rows while keyset delivers ~20 rows
-            boolean hypothesisMatched = offsetScanRows > 50000 && keysetScanRows <= 50;
+            long offsetScanRows = (offsetScanNode != null && offsetScanNode.actualRows() != null) ? offsetScanNode.actualRows() : -1L;
+            long keysetScanRows = (keysetScanNode != null && keysetScanNode.actualRows() != null) ? keysetScanNode.actualRows() : -1L;
+            long offsetScanLoops = (offsetScanNode != null && offsetScanNode.actualLoops() != null) ? offsetScanNode.actualLoops() : -1L;
+            long keysetScanLoops = (keysetScanNode != null && keysetScanNode.actualLoops() != null) ? keysetScanNode.actualLoops() : -1L;
+
+            boolean hasTupleBoundaryInIndexCond = keysetScanNode != null && keysetScanNode.indexCond() != null
+                    && (keysetScanNode.indexCond().contains("created_at") || keysetScanNode.indexCond().contains("ROW("));
+
+            // Specific hypothesis: ordered Index Scan using idx_kst_buyer_recent where deep OFFSET scans 80,020 rows (loops=1) and keyset scans 20 rows (loops=1)
+            boolean hypothesisMatched = offsetScanNode != null && keysetScanNode != null
+                    && "Index Scan".equalsIgnoreCase(offsetScanNode.nodeType())
+                    && "Index Scan".equalsIgnoreCase(keysetScanNode.nodeType())
+                    && "idx_kst_buyer_recent".equalsIgnoreCase(offsetScanNode.indexName())
+                    && "idx_kst_buyer_recent".equalsIgnoreCase(keysetScanNode.indexName())
+                    && hasTupleBoundaryInIndexCond
+                    && offsetScanRows == 80020L && keysetScanRows == 20L
+                    && offsetScanLoops == 1L && keysetScanLoops == 1L;
 
             Map<String, Object> measurements = new LinkedHashMap<>();
             measurements.put("first_page", Map.of(
@@ -356,8 +395,10 @@ public class PostgresKeysetPaginationExperimentsTest {
             kp1Obs.put("caseId", "KP1");
             kp1Obs.put("description", "Same deep page: OFFSET vs Keyset execution plans");
             kp1Obs.put("pageSize", pageSize);
-            kp1Obs.put("fixtureRows", 100000);
-            kp1Obs.put("expectedIds", deepOffsetIds);
+            kp1Obs.put("fixtureRows", 100005);
+            kp1Obs.put("fixtureRowsBuyer42", 100000);
+            kp1Obs.put("fixtureRowsBuyer99", 5);
+            kp1Obs.put("expectedIds", expectedDeepPageIds);
             kp1Obs.put("returnedIds", Map.of(
                     "firstPage", firstPageIds,
                     "deepOffset", deepOffsetIds,
@@ -365,26 +406,32 @@ public class PostgresKeysetPaginationExperimentsTest {
             ));
             kp1Obs.put("deepPagesEqual", true);
             kp1Obs.put("measurements", measurements);
-            kp1Obs.put("hypothesis", "Deep OFFSET scans ~80,020 rows to discard 80,000, while Keyset uses boundary in Index Cond scanning ~20 rows");
+            kp1Obs.put("hypothesis", "Deep OFFSET scans exactly 80,020 rows (loops=1) discarding 80,000 in Limit, while Keyset uses boundary in Index Cond scanning exactly 20 rows (loops=1)");
             kp1Obs.put("hypothesisStatus", hypothesisMatched ? "MATCHED" : "DIFFERENT");
             kp1Obs.put("interpretation", hypothesisMatched
-                    ? "Deep OFFSET forced the index scan to read through 80,020 rows before Limit discarded 80,000, whereas Keyset sought directly to the cursor boundary and scanned only 20 rows."
-                    : "Planner executed with offsetScanRows=" + offsetScanRows + " and keysetScanRows=" + keysetScanRows + ".");
+                    ? "Deep OFFSET forced index scan idx_kst_buyer_recent to read through 80,020 rows before Limit discarded 80,000, whereas Keyset sought directly to the cursor boundary and scanned only 20 rows."
+                    : String.format("Planner executed with offsetScanNode=%s (rows=%d, loops=%d), keysetScanNode=%s (rows=%d, loops=%d, cond=%s).",
+                            offsetScanNode != null ? offsetScanNode.nodeType() : "NONE", offsetScanRows, offsetScanLoops,
+                            keysetScanNode != null ? keysetScanNode.nodeType() : "NONE", keysetScanRows, keysetScanLoops,
+                            keysetScanNode != null ? keysetScanNode.indexCond() : "NONE"));
             kp1Obs.put("assertionsPassed", true);
 
             observations.put("KP1", kp1Obs);
         }
     }
 
-    private static long getScanActualRows(ExplainPlanReader.PlanReport report) {
+    private static ExplainPlanReader.PlanNodeSummary findTableScanNode(ExplainPlanReader.PlanReport report, String relation) {
+        if (report == null || report.nodeSummaries() == null) {
+            return null;
+        }
         for (ExplainPlanReader.PlanNodeSummary s : report.nodeSummaries()) {
             if (s.nodeType() != null && s.nodeType().toLowerCase().contains("scan")) {
-                if (s.actualRows() != null) {
-                    return s.actualRows();
+                if (relation == null || relation.equalsIgnoreCase(s.relationName())) {
+                    return s;
                 }
             }
         }
-        return -1;
+        return null;
     }
 
     @Test
@@ -580,6 +627,9 @@ public class PostgresKeysetPaginationExperimentsTest {
             kp3Obs.put("description", "Concurrent INSERT between pages: OFFSET duplicates row, Keyset stable");
             kp3Obs.put("pageSize", pageSize);
             kp3Obs.put("isolation", "READ COMMITTED");
+            kp3Obs.put("readerIsolation", readerConn.getTransactionIsolation() == Connection.TRANSACTION_READ_COMMITTED ? "READ COMMITTED" : "LEVEL_" + readerConn.getTransactionIsolation());
+            kp3Obs.put("readerAutoCommit", readerConn.getAutoCommit());
+            kp3Obs.put("transactionModel", "per-statement auto-commit in READ COMMITTED; writer committed before reader second query");
             kp3Obs.put("mutation", "INSERT id=25 with newer timestamp base+3s");
             kp3Obs.put("page1Ids", page1Ids);
             kp3Obs.put("page1Cursor", Map.of("createdAt", page1Cursor.createdAt().toString(), "id", page1Cursor.id()));
@@ -660,6 +710,9 @@ public class PostgresKeysetPaginationExperimentsTest {
             kp4Obs.put("description", "Concurrent DELETE before boundary: OFFSET skips row, Keyset stable");
             kp4Obs.put("pageSize", pageSize);
             kp4Obs.put("isolation", "READ COMMITTED");
+            kp4Obs.put("readerIsolation", readerConn.getTransactionIsolation() == Connection.TRANSACTION_READ_COMMITTED ? "READ COMMITTED" : "LEVEL_" + readerConn.getTransactionIsolation());
+            kp4Obs.put("readerAutoCommit", readerConn.getAutoCommit());
+            kp4Obs.put("transactionModel", "per-statement auto-commit in READ COMMITTED; writer committed before reader second query");
             kp4Obs.put("mutation", "DELETE id=24");
             kp4Obs.put("page1Ids", page1Ids);
             kp4Obs.put("page1Cursor", Map.of("createdAt", page1Cursor.createdAt().toString(), "id", page1Cursor.id()));

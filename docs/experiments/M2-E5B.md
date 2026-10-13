@@ -79,7 +79,7 @@ $$(A, B) < (a, b) \iff (A < a) \lor (A = a \land B < b)$$
 
 ## 3. Bảng Thực Nghiệm So Sánh KP1: OFFSET Sâu vs Keyset
 
-Thí nghiệm được thực hiện trên bảng `keyset_trade` với **100.000 dòng** thuộc về `buyer_id = 42`.
+Thí nghiệm được thực hiện trên bảng `keyset_trade` với tổng cộng **100.005 dòng** (bao gồm 100.000 dòng của `buyer_id = 42` và 5 dòng cô lập của `buyer_id = 99` để kiểm tra độ chọn lọc của chỉ mục tổng hợp).
 Kích thước trang: `LIMIT = 20`.
 - Trang đầu: OFFSET 0.
 - Trang sâu: OFFSET 80.000.
@@ -148,7 +148,7 @@ Nhóm trùng timestamp (base + 1s):
 
 ## 5. KP3 & KP4: Hiện Tượng Trôi Vị Trí (Drift) Dưới Giao Dịch Đồng Thời
 
-Dưới mức cô lập mặc định `READ COMMITTED`, mỗi câu lệnh SQL nhận một snapshot mới tại thời điểm câu lệnh đó bắt đầu thực thi. Khi có các giao dịch khác chèn hoặc xóa dữ liệu giữa các lần người dùng lật trang, hiện tượng trôi vị trí (drift) sẽ xảy ra.
+Mô hình giao dịch mô phỏng các yêu cầu lật trang độc lập (stateless HTTP requests) trong ứng dụng web: mỗi truy vấn trang chạy trong một transaction tự động (per-statement autocommit) dưới mức cô lập mặc định `READ COMMITTED`. Ở chế độ này, mỗi câu lệnh SQL nhận một snapshot MVCC mới tại thời điểm câu lệnh bắt đầu thực thi. Khi có các giao dịch khác chèn hoặc xóa dữ liệu giữa các lần người dùng lật trang, hiện tượng trôi vị trí (drift) sẽ xảy ra.
 
 ### 5.1. KP3 — Chèn dữ liệu đồng thời (Concurrent INSERT)
 - **Tình huống:** Bảng có 24 dòng, Page size = 5.
