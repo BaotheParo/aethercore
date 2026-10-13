@@ -158,5 +158,89 @@ class TestEvidenceCollector(unittest.TestCase):
         summary = self.collector.generate_summary_text(res, res, meta)
         self.assertIn("REACTOR TOTAL: 10 Tests Run | 0 Failures | 0 Errors | 0 Skipped | ALL PASS", summary)
 
+    def test_runner_failure_preserves_log_and_does_not_promote_pass(self):
+        # Stub command that returns non-zero exit code (simulating compile or maven error)
+        stub_cmd = [sys.executable, "-c", "import sys; print('Build failed at compile stage'); sys.exit(2)"]
+        with self.assertRaises(ValidationError) as ctx:
+            self.collector.run_suite_and_collect(run_id="test-fail-run", maven_cmd_override=stub_cmd)
+        self.assertIn("Maven execution failed with exit code 2", str(ctx.exception))
+
+        # Check staging directory: log must be preserved
+        staging_dir = os.path.join(self.temp_dir, 'backend-app', 'target', 'lab-evidence', 'test-fail-run')
+        staged_log = os.path.join(staging_dir, "maven-test-output.txt")
+        self.assertTrue(os.path.exists(staged_log), "Staged log file must exist even if runner failed")
+
+        with open(staged_log, "r", encoding="utf-8") as f:
+            log_content = f.read()
+        self.assertIn("Build failed at compile stage", log_content)
+
+        # Verify docs/evidence was NOT created / NOT promoted
+        docs_evidence = os.path.join(self.temp_dir, 'docs', 'evidence', 'test-prompt')
+        self.assertFalse(os.path.exists(docs_evidence), "docs/evidence must not be promoted on failure")
+
+    def test_missing_exit_code_in_summary(self):
+        meta_missing = {
+            "runId": "run-no-exit",
+            "runtimeInfo": {}
+        }
+        core_res = {'total_tests': 1, 'total_failures': 0, 'total_errors': 0, 'total_skipped': 0, 'classes': {}}
+        backend_res = {'total_tests': 1, 'total_failures': 0, 'total_errors': 0, 'total_skipped': 0, 'classes': {}}
+        summary = self.collector.generate_summary_text(core_res, backend_res, meta_missing)
+        self.assertIn("BUILD FAILURE (Exit Code: UNKNOWN/INVALID)", summary)
+
+    def test_fetch_observations_payload_validation(self):
+        obs_dir = os.path.join(self.temp_dir, "fetch-obs")
+        os.makedirs(obs_dir, exist_ok=True)
+        fetch_file = os.path.join(obs_dir, "fetch-observations.json")
+
+        # 1. Missing resultRows or count mismatch
+        payload_invalid = {
+            "runId": "run-fetch",
+            "scenarios": [
+                {
+                    "caseId": "NQ1",
+                    "datasetId": "D1",
+                    "strategy": "BASELINE",
+                    "orderCount": 6,
+                    "distinctBuyerCount": 6,
+                    "preparedStatementsAfterRootQuery": 1,
+                    "preparedStatementsAfterMapping": 7,
+                    "sqlStatements": ["SELECT 1"],
+                    "resultRows": [{"orderId": 1}], # Only 1 row, expected 6
+                    "assertionsPassed": True
+                }
+            ]
+        }
+        with open(fetch_file, "w", encoding="utf-8") as f:
+            json.dump(payload_invalid, f)
+
+        with self.assertRaises(ValidationError) as ctx:
+            self.collector.validate_observations(obs_dir, run_id="run-fetch", required_sets={"fetch-observations.json": ["NQ1"]})
+        self.assertIn("resultRows count (1) does not match orderCount (6)", str(ctx.exception))
+
+        # 2. Valid fetch observation scenario
+        payload_valid = {
+            "runId": "run-fetch",
+            "scenarios": [
+                {
+                    "caseId": "NQ1",
+                    "datasetId": "D1",
+                    "strategy": "BASELINE",
+                    "orderCount": 2,
+                    "distinctBuyerCount": 2,
+                    "preparedStatementsAfterRootQuery": 1,
+                    "preparedStatementsAfterMapping": 3,
+                    "sqlStatements": ["SELECT 1", "SELECT 2"],
+                    "resultRows": [{"orderId": 101}, {"orderId": 102}],
+                    "assertionsPassed": True
+                }
+            ]
+        }
+        with open(fetch_file, "w", encoding="utf-8") as f:
+            json.dump(payload_valid, f)
+
+        validated = self.collector.validate_observations(obs_dir, run_id="run-fetch", required_sets={"fetch-observations.json": ["NQ1"]})
+        self.assertEqual(validated, ["fetch-observations.json"])
+
 if __name__ == "__main__":
     unittest.main()

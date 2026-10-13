@@ -18,4 +18,22 @@
                       value="com.aethercore.backend.market.jpa.TestStatementInspector"/>
         </properties>
     </persistence-unit>
+
+    <persistence-unit name="aethercore-fetch-jpa-test" transaction-type="RESOURCE_LOCAL">
+        <provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+        <class>com.aethercore.backend.fetch.FetchBuyer</class>
+        <class>com.aethercore.backend.fetch.FetchOrder</class>
+        <exclude-unlisted-classes>true</exclude-unlisted-classes>
+
+        <properties>
+            <property name="hibernate.hbm2ddl.auto" value="validate"/>
+            <property name="hibernate.dialect" value="org.hibernate.dialect.PostgreSQLDialect"/>
+            <property name="hibernate.session_factory.statement_inspector"
+                      value="com.aethercore.backend.fetch.FetchStatementInspector"/>
+            <property name="hibernate.generate_statistics" value="true"/>
+            <property name="hibernate.cache.use_second_level_cache" value="false"/>
+            <property name="hibernate.cache.use_query_cache" value="false"/>
+            <property name="hibernate.default_batch_fetch_size" value="1"/>
+        </properties>
+    </persistence-unit>
 </persistence>

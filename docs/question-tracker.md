@@ -40,7 +40,7 @@
 | **SB25** | `@Transactional` bắt đầu và kết thúc transaction tại ranh giới nào? | M2-E3A (TX1–TX8 demarcation & proxy) & M2-E3B (PR1–PR6 propagation boundaries & connection suspension) | FULL | `VERIFIED` (Spring AOP) | `AWAITING_CANDIDATE` | - |
 | **SB26** | Rollback mặc định và catch exception | M2-E3A (TX2, TX5, TX6, TX7) & M2-E3B (PR2 UnexpectedRollbackException, PR4 REQUIRES_NEW failure catch) | FULL | `VERIFIED` (Spring AOP) | `AWAITING_CANDIDATE` | - |
 | **SB27** | REQUIRED, REQUIRES_NEW và NESTED giải quyết những nhu cầu khác nhau nào? | M2-E3B `TransactionPropagationExperimentsTest` (PR1–PR6 propagation, savepoints, connection isolation) | FULL | `VERIFIED` (Spring AOP / PG16) | `AWAITING_CANDIDATE` | - |
-| **SB50** | Persistence context là gì? Dirty checking khiến UPDATE được phát ra khi nào? | M2-E1C `JpaVersionExperimentsTest` (JPA-1 dirty checking & SQL) | PARTIAL | `VERIFIED` (Hibernate/JPA) | `AWAITING_CANDIDATE` | - |
+| **SB50** | Persistence context là gì? Dirty checking khiến UPDATE được phát ra khi nào? | M2-E1C (JPA-1 dirty checking & SQL) & M2-E4A (NQ5 identity map cache tránh query lặp) | PARTIAL | VERIFIED (Hibernate/JPA) | AWAITING_CANDIDATE | - |
 | **SB51** | save(), flush() và saveAndFlush() khác nhau ra sao? Flush có đồng nghĩa commit không? | M2-E1C `JpaVersionExperimentsTest` (JPA-4: EntityManager flush/commit; chưa Spring Data repo) | PARTIAL | `VERIFIED` (Hibernate/JPA) | `AWAITING_CANDIDATE` | - |
 | **SB55** | Optimistic locking với @Version phát hiện xung đột như thế nào? | M2-E1C `JpaVersionExperimentsTest` (JPA-2 flush conflict, JPA-3 commit conflict, JPA-5 fresh retry) | FULL | `VERIFIED` (Hibernate/JPA) | `AWAITING_CANDIDATE` | - |
 | **SQL04** | `NULL`, `0`, chuỗi rỗng `""` và `= NULL` | Chuẩn bị cho các lab DB | NOT_STARTED | - | `AWAITING_CANDIDATE` | - |
@@ -52,6 +52,10 @@
 | **SQL58** | SELECT ... FOR UPDATE khóa dữ liệu để làm gì? Giữ transaction mở lâu sẽ gây tác hại gì? | M2-E1B C4 & M2-E2A DL2 (pg_blocking_pids quan sát tiến trình bị chặn khi giữ transaction mở) | FULL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
 | **SQL59** | Deadlock khi cập nhật lấy khóa khác thứ tự (Lock Ordering) | M2-E2A `PostgresDeadlockExperimentsTest` (DL1 chu trình 2 hàng ngược thứ tự, DL2 chuẩn hóa thứ tự [1,2]; cơ chế nền tảng, chưa batch/upsert) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
 | **SQL60** | Retry câu SQL hay toàn bộ transaction sau khi thành victim deadlock? | M2-E2A `PostgresDeadlockExperimentsTest` (DL3 chứng minh aborted state 40P01 bắt buộc retry toàn bộ transaction với fresh txid_current) | FULL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **SB52** | Lazy loading gây N+1 trong API danh sách | M2-E4A JpaFetchExperimentsTest (NQ1 đo đạc prepared statement count 1+6=7 tầng persistence; chưa HTTP/serialization) | PARTIAL | VERIFIED (Hibernate/JPA) | AWAITING_CANDIDATE | - |
+| **SB53** | JOIN FETCH, @EntityGraph và DTO projection phù hợp với truy vấn nào | M2-E4A JpaFetchExperimentsTest (NQ2 JOIN FETCH 1 select, NQ3 EntityGraph hint 1 select, NQ4 DTO projection 1 select; chưa Spring Data repo) | PARTIAL | VERIFIED (Hibernate/JPA) | AWAITING_CANDIDATE | - |
+| **SQL51** | N+1 tầng JPA khác một JOIN SQL không hiệu quả thế nào | M2-E4A JpaFetchExperimentsTest (NQ1..NQ4 so sánh query count & prepared statement; chưa EXPLAIN/execution-plan) | PARTIAL | VERIFIED (Hibernate/JPA / PostgreSQL 16) | AWAITING_CANDIDATE | - |
+| **SB54** | Collection fetch join cùng pagination | M2-E4B (Chưa triển khai trong M2-E4A; phạm vi lab chỉ ManyToOne) | NOT_STARTED | - | AWAITING_CANDIDATE | - |
 
 ---
 

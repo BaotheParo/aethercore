@@ -199,6 +199,9 @@ public class PostgresDeadlockExperimentsTest {
                 if (barrier != null) {
                     try {
                         barrier.await(10, TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Barrier interrupted", e);
                     } catch (Exception e) {
                         throw new RuntimeException("Barrier coordination failure", e);
                     }
@@ -224,10 +227,35 @@ public class PostgresDeadlockExperimentsTest {
         }
     }
 
+    private void cleanupExecutor(ExecutorService executor, Future<?>... futures) {
+        if (futures != null) {
+            for (Future<?> f : futures) {
+                if (f != null && !f.isDone()) {
+                    f.cancel(true);
+                }
+            }
+        }
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+                if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("ExecutorService did not terminate after shutdownNow");
+                }
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted during executor termination", e);
+        }
+    }
+
     @Test
     @DisplayName("DL1: Controlled Deadlock Reproduction between Two Concurrent Workers")
     void testDL1_ControlledDeadlock() throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(2);
+        Future<WorkerResult> f1 = null;
+        Future<WorkerResult> f2 = null;
         try {
             CyclicBarrier barrier = new CyclicBarrier(2);
             UUID op1 = UUID.randomUUID();
@@ -239,8 +267,8 @@ public class PostgresDeadlockExperimentsTest {
             Callable<WorkerResult> worker1 = () -> executeWorker("T1", op1, 1, List.of(1, 2), barrier, obs1);
             Callable<WorkerResult> worker2 = () -> executeWorker("T2", op2, 1, List.of(2, 1), barrier, obs2);
 
-            Future<WorkerResult> f1 = executor.submit(worker1);
-            Future<WorkerResult> f2 = executor.submit(worker2);
+            f1 = executor.submit(worker1);
+            f2 = executor.submit(worker2);
 
             WorkerResult r1 = f1.get(30, TimeUnit.SECONDS);
             WorkerResult r2 = f2.get(30, TimeUnit.SECONDS);
@@ -274,8 +302,7 @@ public class PostgresDeadlockExperimentsTest {
                     List.of(obs1.get(), obs2.get())
             ));
         } finally {
-            executor.shutdown();
-            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+            cleanupExecutor(executor, f1, f2);
         }
     }
 
@@ -284,6 +311,8 @@ public class PostgresDeadlockExperimentsTest {
     void testDL2_ConsistentLockOrdering() throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(2);
         CountDownLatch t1HoldGate = new CountDownLatch(1);
+        Future<WorkerResult> f1 = null;
+        Future<WorkerResult> f2 = null;
         try {
             UUID op1 = UUID.randomUUID();
             UUID op2 = UUID.randomUUID();
@@ -377,13 +406,13 @@ public class PostgresDeadlockExperimentsTest {
                 }
             };
 
-            Future<WorkerResult> f1 = executor.submit(worker1);
-            Future<WorkerResult> f2 = executor.submit(worker2);
+            f1 = executor.submit(worker1);
+            f2 = executor.submit(worker2);
 
             assertTrue(t2Started.await(10, TimeUnit.SECONDS), "T2 must start before contention verification");
 
             // Verify via pg_blocking_pids that T2 is blocked by T1
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
             boolean verifiedBlocked = false;
             while (System.nanoTime() < deadline) {
                 Boolean isBlocked = jdbcTemplate.queryForObject(
@@ -426,10 +455,7 @@ public class PostgresDeadlockExperimentsTest {
             ));
         } finally {
             t1HoldGate.countDown();
-            executor.shutdown();
-            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
-                executor.shutdownNow();
-            }
+            cleanupExecutor(executor, f1, f2);
         }
     }
 
@@ -437,6 +463,8 @@ public class PostgresDeadlockExperimentsTest {
     @DisplayName("DL3: Whole-Transaction Retry of Deadlock Victim")
     void testDL3_WholeTransactionRetry() throws Exception {
         ExecutorService executor = Executors.newFixedThreadPool(2);
+        Future<WorkerResult> f1 = null;
+        Future<WorkerResult> f2 = null;
         try {
             CyclicBarrier barrier = new CyclicBarrier(2);
             UUID op1 = UUID.randomUUID();
@@ -448,8 +476,8 @@ public class PostgresDeadlockExperimentsTest {
             Callable<WorkerResult> worker1 = () -> executeWorker("T1", op1, 1, List.of(1, 2), barrier, obs1);
             Callable<WorkerResult> worker2 = () -> executeWorker("T2", op2, 1, List.of(2, 1), barrier, obs2);
 
-            Future<WorkerResult> f1 = executor.submit(worker1);
-            Future<WorkerResult> f2 = executor.submit(worker2);
+            f1 = executor.submit(worker1);
+            f2 = executor.submit(worker2);
 
             WorkerResult r1 = f1.get(30, TimeUnit.SECONDS);
             WorkerResult r2 = f2.get(30, TimeUnit.SECONDS);
@@ -533,8 +561,7 @@ public class PostgresDeadlockExperimentsTest {
                     )
             ));
         } finally {
-            executor.shutdown();
-            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+            cleanupExecutor(executor, f1, f2);
         }
     }
 
@@ -558,7 +585,15 @@ public class PostgresDeadlockExperimentsTest {
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("runId", runId);
-        payload.put("environment", "Spring Boot 3.3.4 / Spring Framework 6.1.13 / PostgreSQL 16.15");
+        String pgVersion;
+        try {
+            pgVersion = postgres.getContainerInfo().getConfig().getImage();
+            // Also append server version if available
+            pgVersion = "PostgreSQL (image: " + pgVersion + ")";
+        } catch (Exception e) {
+            pgVersion = "PostgreSQL (configured: postgres:16-alpine)";
+        }
+        payload.put("environment", "Spring Boot 3.3.4 / Spring Framework 6.1.13 / " + pgVersion);
         payload.put("timestamp", Instant.now().toString());
 
         List<String> keys = new ArrayList<>(observations.keySet());

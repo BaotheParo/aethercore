@@ -386,7 +386,14 @@ public class TransactionPropagationExperimentsTest {
 
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("runId", runId);
-        payload.put("environment", "Spring Boot 3.3.4 / Spring Framework 6.1.13 / PostgreSQL 16.15");
+        String pgVersion;
+        try {
+            pgVersion = postgres.getContainerInfo().getConfig().getImage();
+            pgVersion = "PostgreSQL (image: " + pgVersion + ")";
+        } catch (Exception e) {
+            pgVersion = "PostgreSQL (configured: postgres:16-alpine)";
+        }
+        payload.put("environment", "Spring Boot 3.3.4 / Spring Framework 6.1.13 / " + pgVersion);
         payload.put("timestamp", Instant.now().toString());
 
         List<String> keys = new ArrayList<>(observations.keySet());
