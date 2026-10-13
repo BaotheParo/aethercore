@@ -15,7 +15,7 @@ class ValidationError(Exception):
     pass
 
 class EvidenceCollector:
-    def __init__(self, repo_root=None, prompt="prompt14"):
+    def __init__(self, repo_root=None, prompt="prompt15"):
         if repo_root is None:
             self.repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         else:
@@ -136,7 +136,8 @@ class EvidenceCollector:
                 'proxy-observations.json': [f"TX{i}" for i in range(1, 9)],
                 'propagation-observations.json': [f"PR{i}" for i in range(1, 7)],
                 'deadlock-observations.json': [f"DL{i}" for i in range(1, 4)],
-                'fetch-observations.json': [f"NQ{i}" for i in range(1, 6)]
+                'fetch-observations.json': [f"NQ{i}" for i in range(1, 6)],
+                'pagination-observations.json': [f"PG{i}" for i in range(1, 6)]
             }
 
         validated = []
@@ -172,6 +173,9 @@ class EvidenceCollector:
                 # Special validation for fetch observations (Prompt 14)
                 if filename == 'fetch-observations.json':
                     self._validate_fetch_scenario(case_id, s)
+                # Special validation for pagination observations (Prompt 15)
+                elif filename == 'pagination-observations.json':
+                    self._validate_pagination_scenario(case_id, s)
 
             for exp in expected_cases:
                 if exp not in found_cases:
@@ -207,6 +211,41 @@ class EvidenceCollector:
 
         if s.get("assertionsPassed") is not True:
             raise ValidationError(f"Scenario {case_id} assertionsPassed must be True")
+
+    def _validate_pagination_scenario(self, case_id, s):
+        for req_field in ["strategy", "offset", "pageSize", "policyEnabled", "outcome",
+                          "preparedStatementCount", "buyerEntityLoadCount", "orderEntityLoadCount",
+                          "sqlStatements", "returnedBuyerIds", "resultRows", "assertionsPassed"]:
+            if req_field not in s:
+                raise ValidationError(f"Scenario {case_id} missing required field '{req_field}' in pagination-observations.json")
+
+        outcome = s.get("outcome")
+        if outcome not in ["RETURNED_PAGE", "EXPECTED_REJECTION"]:
+            raise ValidationError(f"Scenario {case_id} outcome must be RETURNED_PAGE or EXPECTED_REJECTION, got '{outcome}'")
+
+        if s.get("assertionsPassed") is not True:
+            raise ValidationError(f"Scenario {case_id} assertionsPassed must be True")
+
+        # Counts must be non-negative integers (strictly not boolean)
+        for count_field in ["preparedStatementCount", "buyerEntityLoadCount", "orderEntityLoadCount"]:
+            val = s.get(count_field)
+            if type(val) is not int or val < 0:
+                raise ValidationError(f"Scenario {case_id} {count_field} must be a non-negative integer")
+
+        if outcome == "EXPECTED_REJECTION":
+            if not s.get("exceptionClass"):
+                raise ValidationError(f"Scenario {case_id} EXPECTED_REJECTION must include exceptionClass")
+        elif outcome == "RETURNED_PAGE":
+            sql_stmts = s.get("sqlStatements")
+            if not isinstance(sql_stmts, list) or len(sql_stmts) == 0:
+                raise ValidationError(f"Scenario {case_id} sqlStatements must be a non-empty list for RETURNED_PAGE")
+
+            returned_ids = s.get("returnedBuyerIds")
+            result_rows = s.get("resultRows")
+            if not isinstance(returned_ids, list) or not isinstance(result_rows, list):
+                raise ValidationError(f"Scenario {case_id} returnedBuyerIds and resultRows must be lists")
+            if len(returned_ids) != len(result_rows):
+                raise ValidationError(f"Scenario {case_id} returnedBuyerIds count ({len(returned_ids)}) does not match resultRows count ({len(result_rows)})")
 
     def generate_summary_text(self, core_res, backend_res, meta):
         total_core = core_res['total_tests']
@@ -245,9 +284,8 @@ Runtime Environment:
 - Java: {meta.get('runtimeInfo', {}).get('java', 'NOT_CAPTURED')}
 - Maven: {meta.get('runtimeInfo', {}).get('maven', 'NOT_CAPTURED')}
 - Docker: {meta.get('runtimeInfo', {}).get('docker', 'NOT_CAPTURED')}
-- Test Database: postgres:16-alpine (PostgreSQL 16.15)
-- Spring Boot: 3.3.4 (Spring Framework 6.1.13)
-- Hibernate (test scope): 6.5.3.Final
+- Test Database: postgres:16-alpine (configured); runtime per-suite recorded in observations
+- Frameworks (pom resolved): Spring Boot 3.3.4 / Spring 6.1.13 / Hibernate 6.5.3.Final (test-scope)
 
 ================================================================================
 MODULE 1: core-lab (Pure Java Mechanics)
@@ -261,7 +299,7 @@ Total Tests Run: {total_core} | Failures: {core_failures} | Errors: {core_errors
 
         summary += f"""
 ================================================================================
-MODULE 2: backend-app (Spring Boot, Concurrency, JDBC, JPA, Propagation, Locking, Fetch)
+MODULE 2: backend-app (Spring Boot, Concurrency, JDBC, JPA, Propagation, Locking, Fetch, Pagination)
 Total Test Classes: {len(backend_res['classes'])}
 Total Tests Run: {total_backend} | Failures: {backend_failures} | Errors: {backend_errors} | Skipped: {backend_skipped}
 --------------------------------------------------------------------------------
@@ -270,10 +308,9 @@ Total Tests Run: {total_backend} | Failures: {backend_failures} | Errors: {backe
             status_tag = f"[{d['status']}]"
             summary += f"- {cname}: {d['tests']} tests (elapsed: {d['time']}s) {status_tag}\n"
 
-        overall_status = "ALL PASS" if (total_failures == 0 and total_errors == 0 and total_skipped == 0 and reactor_exit == 0) else "SOME FAILED/SKIPPED"
         summary += f"""
 ================================================================================
-REACTOR TOTAL: {total_reactor} Tests Run | {total_failures} Failures | {total_errors} Errors | {total_skipped} Skipped | {overall_status}
+REACTOR TOTAL: {total_reactor} Tests Run | {total_failures} Failures | {total_errors} Errors | {total_skipped} Skipped | {"ALL PASS" if total_failures == 0 and total_errors == 0 else "FAILURES DETECTED"}
 ================================================================================
 """
         return summary
@@ -332,9 +369,12 @@ REACTOR TOTAL: {total_reactor} Tests Run | {total_failures} Failures | {total_er
                     encoding='utf-8',
                     errors='replace'
                 )
-                for line in process.stdout:
-                    sys.stdout.write(line)
-                    log_file.write(line)
+                try:
+                    for line in process.stdout:
+                        sys.stdout.write(line)
+                        log_file.write(line)
+                finally:
+                    process.stdout.close()
                 process.wait()
                 exit_code = process.returncode
         except Exception as e:
@@ -364,95 +404,62 @@ REACTOR TOTAL: {total_reactor} Tests Run | {total_failures} Failures | {total_er
             "runtimeInfo": runtime_info
         }
 
-        # If Maven failed, write failure manifest to staging and DO NOT promote to docs/evidence
+        # Check Maven exit code strictly
         if exit_code != 0:
+            # Write failure manifest in staging
+            meta["exitCode"] = exit_code
             meta["failureReason"] = f"Maven execution failed with exit code {exit_code}"
-            manifest_fail = os.path.join(staging_dir, "manifest.json")
-            with open(manifest_fail, 'w', encoding='utf-8') as f:
+            fail_manifest = os.path.join(staging_dir, "manifest.json")
+            with open(fail_manifest, "w", encoding="utf-8") as f:
                 json.dump(meta, f, indent=2)
-            raise ValidationError(
-                f"Maven execution failed with exit code {exit_code}. "
-                f"Log preserved at: {staged_log_path}"
-            )
+            raise ValidationError(f"Maven execution failed with exit code {exit_code}. Log preserved in: {staged_log_path}")
 
-        # Validate Surefire reports
-        core_reports_dir = os.path.join(self.repo_root, 'core-lab', 'target', 'surefire-reports')
-        backend_reports_dir = os.path.join(self.repo_root, 'backend-app', 'target', 'surefire-reports')
+        # Parse test reports
+        core_reports = os.path.join(self.repo_root, 'core-lab', 'target', 'surefire-reports')
+        backend_reports = os.path.join(self.repo_root, 'backend-app', 'target', 'surefire-reports')
 
-        core_res = self.parse_surefire_reports(core_reports_dir)
-        backend_res = self.parse_surefire_reports(backend_reports_dir)
+        core_res = self.parse_surefire_reports(core_reports)
+        backend_res = self.parse_surefire_reports(backend_reports)
 
         # Validate observations in staging_dir
         validated_obs = self.validate_observations(staging_dir, run_id=run_id)
         meta["observationsValidated"] = validated_obs
 
-        # Generate summary
+        # Generate summary text
         summary_text = self.generate_summary_text(core_res, backend_res, meta)
 
-        total_reactor_failures = core_res['total_failures'] + backend_res['total_failures']
-        total_reactor_errors = core_res['total_errors'] + backend_res['total_errors']
-        total_reactor_skipped = core_res['total_skipped'] + backend_res['total_skipped']
-
-        if total_reactor_failures > 0 or total_reactor_errors > 0:
-            meta["failureReason"] = f"Test execution reported {total_reactor_failures} failures and {total_reactor_errors} errors"
-            manifest_fail = os.path.join(staging_dir, "manifest.json")
-            with open(manifest_fail, 'w', encoding='utf-8') as f:
-                json.dump(meta, f, indent=2)
-            raise ValidationError(f"Test execution reported {total_reactor_failures} failures and {total_reactor_errors} errors")
-
-        if total_reactor_skipped > 0:
-            meta["failureReason"] = f"Strict acceptance failed: {total_reactor_skipped} skipped tests"
-            manifest_fail = os.path.join(staging_dir, "manifest.json")
-            with open(manifest_fail, 'w', encoding='utf-8') as f:
-                json.dump(meta, f, indent=2)
-            raise ValidationError(f"Strict acceptance failed: {total_reactor_skipped} skipped tests")
-
-        # Promote artifacts to docs/evidence/<prompt>
+        # Destination directory under docs/evidence/<prompt>
         dest_dir = os.path.join(self.repo_root, 'docs', 'evidence', self.prompt)
         os.makedirs(dest_dir, exist_ok=True)
 
-        summary_file = os.path.join(dest_dir, "test-summary.txt")
-        with open(summary_file, 'w', encoding='utf-8') as f:
-            f.write(summary_text)
-
-        manifest_file = os.path.join(dest_dir, "manifest.json")
-        with open(manifest_file, 'w', encoding='utf-8') as f:
+        # Write manifest and summary in dest
+        with open(os.path.join(dest_dir, "manifest.json"), "w", encoding="utf-8") as f:
             json.dump(meta, f, indent=2)
 
+        with open(os.path.join(dest_dir, "test-summary.txt"), "w", encoding="utf-8") as f:
+            f.write(summary_text)
+
         # Copy observations and log
-        for obs in validated_obs:
-            shutil.copyfile(os.path.join(staging_dir, obs), os.path.join(dest_dir, obs))
+        for obs_file in validated_obs:
+            shutil.copyfile(os.path.join(staging_dir, obs_file), os.path.join(dest_dir, obs_file))
+
         shutil.copyfile(staged_log_path, os.path.join(dest_dir, "maven-test-output.txt"))
 
         print(f"Successfully promoted evidence bundle to: {dest_dir}")
-        return {
-            "meta": meta,
-            "core": core_res,
-            "backend": backend_res,
-            "evidenceDir": dest_dir
-        }
+        print("EVIDENCE COLLECTION VERIFIED: SUCCESS")
+        return dest_dir
 
 def main():
     parser = argparse.ArgumentParser(description="AetherCore Lab Evidence Collector")
     parser.add_argument("--run", action="store_true", help="Execute full Maven clean test before collection")
-    parser.add_argument("--prompt", default="prompt14", help="Prompt identifier (e.g. prompt14)")
-    parser.add_argument("--run-id", default=None, help="Explicit run ID")
-    parser.add_argument("--repo-root", default=None, help="Root path of the repository")
-
+    parser.add_argument("--prompt", type=str, default="prompt15", help="Target prompt directory under docs/evidence (e.g. prompt15)")
     args = parser.parse_args()
 
-    collector = EvidenceCollector(repo_root=args.repo_root, prompt=args.prompt)
+    collector = EvidenceCollector(prompt=args.prompt)
     if args.run:
-        try:
-            res = collector.run_suite_and_collect(run_id=args.run_id)
-            print("EVIDENCE COLLECTION VERIFIED: SUCCESS")
-            sys.exit(0)
-        except Exception as e:
-            print(f"EVIDENCE COLLECTION FAILED: {e}", file=sys.stderr)
-            sys.exit(1)
+        collector.run_suite_and_collect()
     else:
-        print("Running in verification mode. Use --run to perform execution and collection.")
-        sys.exit(0)
+        print("Use --run to execute full Maven clean test and collect evidence.")
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

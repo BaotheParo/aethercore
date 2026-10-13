@@ -53,9 +53,10 @@
 | **SQL59** | Deadlock khi cập nhật lấy khóa khác thứ tự (Lock Ordering) | M2-E2A `PostgresDeadlockExperimentsTest` (DL1 chu trình 2 hàng ngược thứ tự, DL2 chuẩn hóa thứ tự [1,2]; cơ chế nền tảng, chưa batch/upsert) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
 | **SQL60** | Retry câu SQL hay toàn bộ transaction sau khi thành victim deadlock? | M2-E2A `PostgresDeadlockExperimentsTest` (DL3 chứng minh aborted state 40P01 bắt buộc retry toàn bộ transaction với fresh txid_current) | FULL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
 | **SB52** | Lazy loading gây N+1 trong API danh sách | M2-E4A JpaFetchExperimentsTest (NQ1 đo đạc prepared statement count 1+6=7 tầng persistence; chưa HTTP/serialization) | PARTIAL | VERIFIED (Hibernate/JPA) | AWAITING_CANDIDATE | - |
-| **SB53** | JOIN FETCH, @EntityGraph và DTO projection phù hợp với truy vấn nào | M2-E4A JpaFetchExperimentsTest (NQ2 JOIN FETCH 1 select, NQ3 EntityGraph hint 1 select, NQ4 DTO projection 1 select; chưa Spring Data repo) | PARTIAL | VERIFIED (Hibernate/JPA) | AWAITING_CANDIDATE | - |
-| **SQL51** | N+1 tầng JPA khác một JOIN SQL không hiệu quả thế nào | M2-E4A JpaFetchExperimentsTest (NQ1..NQ4 so sánh query count & prepared statement; chưa EXPLAIN/execution-plan) | PARTIAL | VERIFIED (Hibernate/JPA / PostgreSQL 16) | AWAITING_CANDIDATE | - |
-| **SB54** | Collection fetch join cùng pagination | M2-E4B (Chưa triển khai trong M2-E4A; phạm vi lab chỉ ManyToOne) | NOT_STARTED | - | AWAITING_CANDIDATE | - |
+| **SB53** | JOIN FETCH, @EntityGraph và DTO projection phù hợp với truy vấn nào | M2-E4A (NQ2..NQ4) & M2-E4B (PG1–PG5: Trade-off collection fetch join vô hiệu hóa DB LIMIT, ưu thế của two-step ID pagination; chưa Spring Data repo) | PARTIAL | VERIFIED (Hibernate/JPA) | AWAITING_CANDIDATE | - |
+| **SQL51** | N+1 tầng JPA khác một JOIN SQL không hiệu quả thế nào | M2-E4A (NQ1..NQ4 so sánh query count) & M2-E4B (PG1 chứng minh 1 SQL JOIN collection tải toàn bộ dataset vào bộ nhớ so với PG3 hai bước; chưa execution-plan benchmark) | PARTIAL | VERIFIED (Hibernate/JPA / PostgreSQL 16) | AWAITING_CANDIDATE | - |
+| **SB54** | Collection fetch join cùng pagination | M2-E4B JpaCollectionPaginationExperimentsTest (PG1 in-memory pagination, PG2 fail-fast guard, PG3–PG5 two-step pagination) | FULL | VERIFIED (Hibernate/JPA / PostgreSQL 16) | AWAITING_CANDIDATE | - |
+| **SQL50** | Offset pagination và keyset khi bảng lớn | M2-E4B (PG3–PG5 kiểm chứng offset/limit trên scalar ID query kết hợp tiebreaker ordering; keyset chưa triển khai) | PARTIAL | VERIFIED (PostgreSQL 16) | AWAITING_CANDIDATE | - |
 
 ---
 

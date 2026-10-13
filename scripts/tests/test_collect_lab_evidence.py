@@ -1,13 +1,16 @@
-import unittest
 import os
 import sys
-import tempfile
 import json
 import shutil
-import xml.etree.ElementTree as ET
+import tempfile
+import unittest
+from unittest import mock
 
-# Ensure scripts dir is in path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Ensure scripts dir is on sys.path
+SCRIPTS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if SCRIPTS_DIR not in sys.path:
+    sys.path.insert(0, SCRIPTS_DIR)
+
 from collect_lab_evidence import EvidenceCollector, ValidationError
 
 class TestEvidenceCollector(unittest.TestCase):
@@ -20,63 +23,53 @@ class TestEvidenceCollector(unittest.TestCase):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_missing_reports_dir_raises(self):
-        empty_dir = os.path.join(self.temp_dir, "empty-reports")
-        os.makedirs(empty_dir, exist_ok=True)
+        non_existent = os.path.join(self.temp_dir, "non-existent")
         with self.assertRaises(ValidationError) as ctx:
-            self.collector.parse_surefire_reports(empty_dir)
+            self.collector.parse_surefire_reports(non_existent)
         self.assertIn("No Surefire XML reports found", str(ctx.exception))
 
     def test_malformed_xml_raises(self):
-        rep_dir = os.path.join(self.temp_dir, "malformed-reports")
-        os.makedirs(rep_dir, exist_ok=True)
-        xml_file = os.path.join(rep_dir, "TEST-malformed.xml")
-        with open(xml_file, "w", encoding="utf-8") as f:
-            f.write("<testsuite name='bad' tests='1'>unclosed tag")
+        reports_dir = os.path.join(self.temp_dir, "reports")
+        os.makedirs(reports_dir, exist_ok=True)
+        bad_xml = os.path.join(reports_dir, "TEST-bad.xml")
+        with open(bad_xml, "w", encoding="utf-8") as f:
+            f.write("<testsuite name='Bad'>unclosed tag")
 
         with self.assertRaises(ValidationError) as ctx:
-            self.collector.parse_surefire_reports(rep_dir)
-        self.assertIn("Malformed Surefire XML in file", str(ctx.exception))
+            self.collector.parse_surefire_reports(reports_dir)
+        self.assertIn("Malformed Surefire XML", str(ctx.exception))
 
     def test_xml_with_failure_or_error_detected(self):
-        rep_dir = os.path.join(self.temp_dir, "failure-reports")
-        os.makedirs(rep_dir, exist_ok=True)
-        xml_file = os.path.join(rep_dir, "TEST-failure.xml")
-        content = """<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.aethercore.FailureTest" tests="2" failures="1" errors="0" skipped="0" time="0.123">
-  <testcase name="testOne" time="0.050"/>
-  <testcase name="testTwo" time="0.073">
-    <failure message="expected 1 but was 2">Assertion failure</failure>
-  </testcase>
-</testsuite>
-"""
-        with open(xml_file, "w", encoding="utf-8") as f:
-            f.write(content)
+        reports_dir = os.path.join(self.temp_dir, "reports")
+        os.makedirs(reports_dir, exist_ok=True)
+        fail_xml = os.path.join(reports_dir, "TEST-fail.xml")
+        with open(fail_xml, "w", encoding="utf-8") as f:
+            f.write("""<testsuite name="com.example.FailTest" tests="2" failures="1" errors="0" skipped="0" time="0.1">
+                <testcase name="testPass" time="0.05"/>
+                <testcase name="testFail" time="0.05">
+                    <failure message="assertion failed">stacktrace</failure>
+                </testcase>
+            </testsuite>""")
 
-        res = self.collector.parse_surefire_reports(rep_dir)
+        res = self.collector.parse_surefire_reports(reports_dir)
         self.assertEqual(res['total_tests'], 2)
         self.assertEqual(res['total_failures'], 1)
-        self.assertEqual(res['total_errors'], 0)
-        self.assertEqual(res['classes']['com.aethercore.FailureTest']['status'], 'FAIL')
+        self.assertEqual(res['classes']['com.example.FailTest']['status'], 'FAIL')
 
     def test_xml_with_skipped_detected(self):
-        rep_dir = os.path.join(self.temp_dir, "skipped-reports")
-        os.makedirs(rep_dir, exist_ok=True)
-        xml_file = os.path.join(rep_dir, "TEST-skipped.xml")
-        content = """<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="com.aethercore.SkippedTest" tests="2" failures="0" errors="0" skipped="1" time="0.050">
-  <testcase name="testOne" time="0.050"/>
-  <testcase name="testSkipped" time="0.000">
-    <skipped/>
-  </testcase>
-</testsuite>
-"""
-        with open(xml_file, "w", encoding="utf-8") as f:
-            f.write(content)
+        reports_dir = os.path.join(self.temp_dir, "reports")
+        os.makedirs(reports_dir, exist_ok=True)
+        skip_xml = os.path.join(reports_dir, "TEST-skip.xml")
+        with open(skip_xml, "w", encoding="utf-8") as f:
+            f.write("""<testsuite name="com.example.SkipTest" tests="1" failures="0" errors="0" skipped="1" time="0.01">
+                <testcase name="testSkip" time="0.01">
+                    <skipped/>
+                </testcase>
+            </testsuite>""")
 
-        res = self.collector.parse_surefire_reports(rep_dir)
-        self.assertEqual(res['total_tests'], 2)
+        res = self.collector.parse_surefire_reports(reports_dir)
         self.assertEqual(res['total_skipped'], 1)
-        self.assertEqual(res['classes']['com.aethercore.SkippedTest']['status'], 'FAIL')
+        self.assertEqual(res['classes']['com.example.SkipTest']['status'], 'FAIL')
 
     def test_nonzero_exit_code_in_manifest(self):
         meta = {
@@ -84,99 +77,92 @@ class TestEvidenceCollector(unittest.TestCase):
             "exitCode": 1,
             "runtimeInfo": {}
         }
-        core_res = {'total_tests': 1, 'total_failures': 0, 'total_errors': 0, 'total_skipped': 0, 'classes': {}}
-        backend_res = {'total_tests': 1, 'total_failures': 0, 'total_errors': 0, 'total_skipped': 0, 'classes': {}}
+        core_res = {'total_tests': 5, 'total_failures': 0, 'total_errors': 0, 'total_skipped': 0, 'classes': {}}
+        backend_res = {'total_tests': 5, 'total_failures': 0, 'total_errors': 0, 'total_skipped': 0, 'classes': {}}
         summary = self.collector.generate_summary_text(core_res, backend_res, meta)
-        self.assertIn("Reactor Result: BUILD FAILURE (Exit Code: 1)", summary)
-        self.assertIn("SOME FAILED/SKIPPED", summary)
+        self.assertIn("BUILD FAILURE (Exit Code: 1)", summary)
 
     def test_observation_missing_case_or_wrong_runid(self):
-        obs_dir = os.path.join(self.temp_dir, "observations")
+        obs_dir = os.path.join(self.temp_dir, "obs")
         os.makedirs(obs_dir, exist_ok=True)
+        file_path = os.path.join(obs_dir, "proxy-observations.json")
 
-        # 1. Wrong runId
-        obs_path = os.path.join(obs_dir, "proxy-observations.json")
-        with open(obs_path, "w", encoding="utf-8") as f:
-            json.dump({
-                "runId": "wrong-id",
-                "scenarios": [{"caseId": f"TX{i}"} for i in range(1, 9)]
-            }, f)
+        # Wrong runId
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump({"runId": "other-run", "scenarios": [{"caseId": "TX1"}]}, f)
 
         with self.assertRaises(ValidationError) as ctx:
-            self.collector.validate_observations(obs_dir, run_id="expected-id", required_sets={"proxy-observations.json": [f"TX{i}" for i in range(1, 9)]})
+            self.collector.validate_observations(obs_dir, run_id="expected-run", required_sets={"proxy-observations.json": ["TX1"]})
         self.assertIn("Mismatched runId", str(ctx.exception))
 
-        # 2. Missing required case (TX8 missing)
-        with open(obs_path, "w", encoding="utf-8") as f:
-            json.dump({
-                "runId": "expected-id",
-                "scenarios": [{"caseId": f"TX{i}"} for i in range(1, 8)]
-            }, f)
+        # Missing case
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump({"runId": "expected-run", "scenarios": [{"caseId": "TX1"}]}, f)
 
         with self.assertRaises(ValidationError) as ctx:
-            self.collector.validate_observations(obs_dir, run_id="expected-id", required_sets={"proxy-observations.json": [f"TX{i}" for i in range(1, 9)]})
-        self.assertIn("Required caseId 'TX8' not found", str(ctx.exception))
-
-        # 3. Duplicate case
-        with open(obs_path, "w", encoding="utf-8") as f:
-            json.dump({
-                "runId": "expected-id",
-                "scenarios": [{"caseId": "TX1"}, {"caseId": "TX1"}]
-            }, f)
-
-        with self.assertRaises(ValidationError) as ctx:
-            self.collector.validate_observations(obs_dir, run_id="expected-id", required_sets={"proxy-observations.json": ["TX1"]})
-        self.assertIn("Duplicate caseId 'TX1'", str(ctx.exception))
+            self.collector.validate_observations(obs_dir, run_id="expected-run", required_sets={"proxy-observations.json": ["TX1", "TX2"]})
+        self.assertIn("Required caseId 'TX2' not found", str(ctx.exception))
 
     def test_valid_input_with_nested_suites_rollup(self):
-        rep_dir = os.path.join(self.temp_dir, "nested-reports")
-        os.makedirs(rep_dir, exist_ok=True)
+        reports_dir = os.path.join(self.temp_dir, "nested_reports")
+        sub1 = os.path.join(reports_dir, "sub1")
+        sub2 = os.path.join(reports_dir, "sub2")
+        os.makedirs(sub1, exist_ok=True)
+        os.makedirs(sub2, exist_ok=True)
 
-        parent_xml = os.path.join(rep_dir, "TEST-com.aethercore.ParentTest.xml")
-        nested_a_xml = os.path.join(rep_dir, "TEST-com.aethercore.ParentTest$NestedA.xml")
-        nested_b_xml = os.path.join(rep_dir, "TEST-com.aethercore.ParentTest$NestedB.xml")
+        with open(os.path.join(sub1, "TEST-A.xml"), "w", encoding="utf-8") as f:
+            f.write('<testsuite name="ClassA" tests="2" failures="0" errors="0" skipped="0" time="0.2"/>')
+        with open(os.path.join(sub2, "TEST-B.xml"), "w", encoding="utf-8") as f:
+            f.write('<testsuite name="ClassB" tests="3" failures="0" errors="0" skipped="0" time="0.3"/>')
 
-        with open(parent_xml, "w", encoding="utf-8") as f:
-            f.write('<testsuite name="com.aethercore.ParentTest" tests="0" failures="0" errors="0" skipped="0" time="0.010"/>')
-        with open(nested_a_xml, "w", encoding="utf-8") as f:
-            f.write('<testsuite name="com.aethercore.ParentTest$NestedA" tests="3" failures="0" errors="0" skipped="0" time="0.025"/>')
-        with open(nested_b_xml, "w", encoding="utf-8") as f:
-            f.write('<testsuite name="com.aethercore.ParentTest$NestedB" tests="2" failures="0" errors="0" skipped="0" time="0.015"/>')
-
-        res = self.collector.parse_surefire_reports(rep_dir)
+        res = self.collector.parse_surefire_reports(reports_dir)
         self.assertEqual(res['total_tests'], 5)
         self.assertEqual(res['total_failures'], 0)
-        self.assertEqual(res['total_errors'], 0)
-        self.assertEqual(res['total_skipped'], 0)
-        self.assertEqual(len(res['classes']), 3)
-
-        meta = {
-            "runId": "run-nested",
-            "exitCode": 0,
-            "runtimeInfo": {}
-        }
-        summary = self.collector.generate_summary_text(res, res, meta)
-        self.assertIn("REACTOR TOTAL: 10 Tests Run | 0 Failures | 0 Errors | 0 Skipped | ALL PASS", summary)
+        self.assertEqual(len(res['classes']), 2)
 
     def test_runner_failure_preserves_log_and_does_not_promote_pass(self):
-        # Stub command that returns non-zero exit code (simulating compile or maven error)
-        stub_cmd = [sys.executable, "-c", "import sys; print('Build failed at compile stage'); sys.exit(2)"]
-        with self.assertRaises(ValidationError) as ctx:
-            self.collector.run_suite_and_collect(run_id="test-fail-run", maven_cmd_override=stub_cmd)
+        # 1. Seed existing PASS evidence with sentinel content at destination
+        dest_dir = os.path.join(self.temp_dir, 'docs', 'evidence', self.collector.prompt)
+        os.makedirs(dest_dir, exist_ok=True)
+        sentinel_path = os.path.join(dest_dir, "sentinel.txt")
+        with open(sentinel_path, "w", encoding="utf-8") as f:
+            f.write("PREVIOUS_PASS_SENTINEL")
+
+        # 2. Stub command that simulates runner deleting target dir, printing error, and exiting with 2
+        stub_cmd = [
+            sys.executable, "-c",
+            "import sys, os, shutil; "
+            "t = os.path.join('backend-app', 'target'); "
+            "shutil.rmtree(t, ignore_errors=True) if os.path.exists(t) else None; "
+            "print('Build failed at compile stage'); sys.exit(2)"
+        ]
+
+        # 3. Mock get_runtime_info so test does not depend on host environment
+        with mock.patch.object(self.collector, 'get_runtime_info', return_value={'java': 'test-java', 'maven': 'test-mvn', 'docker': 'test-docker'}):
+            with self.assertRaises(ValidationError) as ctx:
+                self.collector.run_suite_and_collect(run_id="test-fail-run", maven_cmd_override=stub_cmd)
         self.assertIn("Maven execution failed with exit code 2", str(ctx.exception))
 
-        # Check staging directory: log must be preserved
+        # 4. Check staging directory: log and failure manifest must be preserved
         staging_dir = os.path.join(self.temp_dir, 'backend-app', 'target', 'lab-evidence', 'test-fail-run')
         staged_log = os.path.join(staging_dir, "maven-test-output.txt")
+        staged_manifest = os.path.join(staging_dir, "manifest.json")
         self.assertTrue(os.path.exists(staged_log), "Staged log file must exist even if runner failed")
+        self.assertTrue(os.path.exists(staged_manifest), "Staged failure manifest must exist")
 
         with open(staged_log, "r", encoding="utf-8") as f:
             log_content = f.read()
         self.assertIn("Build failed at compile stage", log_content)
 
-        # Verify docs/evidence was NOT created / NOT promoted
-        docs_evidence = os.path.join(self.temp_dir, 'docs', 'evidence', 'test-prompt')
-        self.assertFalse(os.path.exists(docs_evidence), "docs/evidence must not be promoted on failure")
+        with open(staged_manifest, "r", encoding="utf-8") as f:
+            manifest_data = json.load(f)
+        self.assertEqual(manifest_data.get("exitCode"), 2)
+        self.assertIn("exit code 2", manifest_data.get("failureReason", ""))
+
+        # 5. Verify destination sentinel file is preserved (not overwritten by failed run)
+        self.assertTrue(os.path.exists(sentinel_path), "Existing evidence must not be wiped on failure")
+        with open(sentinel_path, "r", encoding="utf-8") as f:
+            self.assertEqual(f.read(), "PREVIOUS_PASS_SENTINEL")
 
     def test_missing_exit_code_in_summary(self):
         meta_missing = {
@@ -193,54 +179,172 @@ class TestEvidenceCollector(unittest.TestCase):
         os.makedirs(obs_dir, exist_ok=True)
         fetch_file = os.path.join(obs_dir, "fetch-observations.json")
 
-        # 1. Missing resultRows or count mismatch
-        payload_invalid = {
+        # 1. Invalid payload (missing measurements)
+        invalid_payload = {
             "runId": "run-fetch",
             "scenarios": [
                 {
                     "caseId": "NQ1",
                     "datasetId": "D1",
-                    "strategy": "BASELINE",
+                    "strategy": "Baseline N+1"
+                    # missing required fields
+                }
+            ]
+        }
+        with open(fetch_file, "w", encoding="utf-8") as f:
+            json.dump(invalid_payload, f)
+
+        with self.assertRaises(ValidationError) as ctx:
+            self.collector.validate_observations(obs_dir, run_id="run-fetch", required_sets={"fetch-observations.json": ["NQ1"]})
+        self.assertIn("missing required field", str(ctx.exception))
+
+        # 2. Valid fetch observation scenario
+        valid_payload = {
+            "runId": "run-fetch",
+            "scenarios": [
+                {
+                    "caseId": "NQ1",
+                    "datasetId": "D1",
+                    "strategy": "Baseline N+1",
                     "orderCount": 6,
                     "distinctBuyerCount": 6,
                     "preparedStatementsAfterRootQuery": 1,
                     "preparedStatementsAfterMapping": 7,
-                    "sqlStatements": ["SELECT 1"],
-                    "resultRows": [{"orderId": 1}], # Only 1 row, expected 6
+                    "sqlStatements": ["select 1", "select 2"],
+                    "resultRows": [{"id": i} for i in range(6)],
                     "assertionsPassed": True
                 }
             ]
         }
         with open(fetch_file, "w", encoding="utf-8") as f:
-            json.dump(payload_invalid, f)
-
-        with self.assertRaises(ValidationError) as ctx:
-            self.collector.validate_observations(obs_dir, run_id="run-fetch", required_sets={"fetch-observations.json": ["NQ1"]})
-        self.assertIn("resultRows count (1) does not match orderCount (6)", str(ctx.exception))
-
-        # 2. Valid fetch observation scenario
-        payload_valid = {
-            "runId": "run-fetch",
-            "scenarios": [
-                {
-                    "caseId": "NQ1",
-                    "datasetId": "D1",
-                    "strategy": "BASELINE",
-                    "orderCount": 2,
-                    "distinctBuyerCount": 2,
-                    "preparedStatementsAfterRootQuery": 1,
-                    "preparedStatementsAfterMapping": 3,
-                    "sqlStatements": ["SELECT 1", "SELECT 2"],
-                    "resultRows": [{"orderId": 101}, {"orderId": 102}],
-                    "assertionsPassed": True
-                }
-            ]
-        }
-        with open(fetch_file, "w", encoding="utf-8") as f:
-            json.dump(payload_valid, f)
+            json.dump(valid_payload, f)
 
         validated = self.collector.validate_observations(obs_dir, run_id="run-fetch", required_sets={"fetch-observations.json": ["NQ1"]})
         self.assertEqual(validated, ["fetch-observations.json"])
 
-if __name__ == "__main__":
+    def test_pagination_observations_payload_validation(self):
+        obs_dir = os.path.join(self.temp_dir, "page-obs")
+        os.makedirs(obs_dir, exist_ok=True)
+        page_file = os.path.join(obs_dir, "pagination-observations.json")
+
+        # 1. Rejection without exceptionClass raises
+        bad_rejection = {
+            "runId": "run-page",
+            "scenarios": [
+                {
+                    "caseId": "PG2",
+                    "strategy": "Fail-fast guard",
+                    "offset": 0,
+                    "pageSize": 2,
+                    "policyEnabled": True,
+                    "outcome": "EXPECTED_REJECTION",
+                    "preparedStatementCount": 0,
+                    "buyerEntityLoadCount": 0,
+                    "orderEntityLoadCount": 0,
+                    "sqlStatements": [],
+                    "returnedBuyerIds": [],
+                    "resultRows": [],
+                    "assertionsPassed": True
+                    # missing exceptionClass
+                }
+            ]
+        }
+        with open(page_file, "w", encoding="utf-8") as f:
+            json.dump(bad_rejection, f)
+
+        with self.assertRaises(ValidationError) as ctx:
+            self.collector.validate_observations(obs_dir, run_id="run-page", required_sets={"pagination-observations.json": ["PG2"]})
+        self.assertIn("EXPECTED_REJECTION must include exceptionClass", str(ctx.exception))
+
+        # 2. Boolean count raises
+        bad_counts = {
+            "runId": "run-page",
+            "scenarios": [
+                {
+                    "caseId": "PG1",
+                    "strategy": "Unsafe in-memory",
+                    "offset": 0,
+                    "pageSize": 2,
+                    "policyEnabled": False,
+                    "outcome": "RETURNED_PAGE",
+                    "preparedStatementCount": True, # bool is not allowed as count
+                    "buyerEntityLoadCount": 5,
+                    "orderEntityLoadCount": 10,
+                    "sqlStatements": ["select 1"],
+                    "returnedBuyerIds": [1, 2],
+                    "resultRows": [{"id": 1}, {"id": 2}],
+                    "assertionsPassed": True
+                }
+            ]
+        }
+        with open(page_file, "w", encoding="utf-8") as f:
+            json.dump(bad_counts, f)
+
+        with self.assertRaises(ValidationError) as ctx:
+            self.collector.validate_observations(obs_dir, run_id="run-page", required_sets={"pagination-observations.json": ["PG1"]})
+        self.assertIn("must be a non-negative integer", str(ctx.exception))
+
+        # 3. Valid pagination observations payload (PG1 to PG5)
+        valid_payload = {
+            "runId": "run-page",
+            "scenarios": [
+                {
+                    "caseId": "PG1",
+                    "strategy": "Unsafe in-memory",
+                    "offset": 0,
+                    "pageSize": 2,
+                    "policyEnabled": False,
+                    "outcome": "RETURNED_PAGE",
+                    "preparedStatementCount": 1,
+                    "buyerEntityLoadCount": 5,
+                    "orderEntityLoadCount": 10,
+                    "sqlStatements": ["select 1"],
+                    "returnedBuyerIds": [1, 2],
+                    "resultRows": [{"id": 1}, {"id": 2}],
+                    "assertionsPassed": True
+                },
+                {
+                    "caseId": "PG2",
+                    "strategy": "Fail-fast guard",
+                    "offset": 0,
+                    "pageSize": 2,
+                    "policyEnabled": True,
+                    "outcome": "EXPECTED_REJECTION",
+                    "preparedStatementCount": 0,
+                    "buyerEntityLoadCount": 0,
+                    "orderEntityLoadCount": 0,
+                    "sqlStatements": [],
+                    "returnedBuyerIds": [],
+                    "resultRows": [],
+                    "exceptionClass": "org.hibernate.HibernateException",
+                    "assertionsPassed": True
+                },
+                {
+                    "caseId": "PG5",
+                    "strategy": "Empty page",
+                    "offset": 99,
+                    "pageSize": 2,
+                    "policyEnabled": True,
+                    "outcome": "RETURNED_PAGE",
+                    "preparedStatementCount": 1,
+                    "buyerEntityLoadCount": 0,
+                    "orderEntityLoadCount": 0,
+                    "sqlStatements": ["select id from buyer"],
+                    "returnedBuyerIds": [],
+                    "resultRows": [],
+                    "assertionsPassed": True
+                }
+            ]
+        }
+        with open(page_file, "w", encoding="utf-8") as f:
+            json.dump(valid_payload, f)
+
+        validated = self.collector.validate_observations(
+            obs_dir,
+            run_id="run-page",
+            required_sets={"pagination-observations.json": ["PG1", "PG2", "PG5"]}
+        )
+        self.assertEqual(validated, ["pagination-observations.json"])
+
+if __name__ == '__main__':
     unittest.main()

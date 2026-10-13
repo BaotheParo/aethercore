@@ -1,0 +1,21 @@
+{
+  "runId": "prompt15-20261013-103129-8d8ca1",
+  "prompt": "prompt15",
+  "timestamp": "2026-10-13T10:31:29.215736+07:00",
+  "gitHead": "81de50fd1eb602edc79fe7476f612f8201dc7503",
+  "workingTreeDirty": true,
+  "command": "C:\\Program Files\\Apache\\maven\\apache-maven-3.9.12\\bin\\mvn.CMD clean test -Dlab.runId=prompt15-20261013-103129-8d8ca1 -Dlab.evidenceDir=D:\\Project CV\\INTERVIEW\\aethercore\\backend-app\\target\\lab-evidence\\prompt15-20261013-103129-8d8ca1",
+  "exitCode": 0,
+  "runtimeInfo": {
+    "java": "java version \"22\" 2024-03-19",
+    "maven": "Apache Maven 3.9.12 (848fbb4bf2d427b72bdb2471c22fced7ebd9a7a1)",
+    "docker": "Docker Server 29.5.3"
+  },
+  "observationsValidated": [
+    "proxy-observations.json",
+    "propagation-observations.json",
+    "deadlock-observations.json",
+    "fetch-observations.json",
+    "pagination-observations.json"
+  ]
+}

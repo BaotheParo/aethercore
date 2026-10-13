@@ -1,0 +1,113 @@
+{
+  "runId" : "prompt15-20261013-103129-8d8ca1",
+  "environment" : "Spring Boot 3.3.4 / Spring Framework 6.1.13 / PostgreSQL (image: postgres:16-alpine)",
+  "timestamp" : "2026-10-13T03:31:50.709143Z",
+  "scenarios" : [ {
+    "caseId" : "DL1",
+    "description" : "Controlled reproduction of 2-row deadlock cycle between two workers",
+    "totalAttempts" : 2,
+    "committedOperations" : 1,
+    "deadlockVictims" : 1,
+    "counterA" : 1,
+    "counterB" : 1,
+    "operationMarkers" : 1,
+    "workers" : [ {
+      "workerId" : "T1",
+      "operationId" : "67ec1773-1c5a-416d-ba0b-0b21f3c30b68",
+      "attempt" : 1,
+      "pid" : 61,
+      "txId" : 756,
+      "updateOrder" : [ 1, 2 ],
+      "firstUpdateCompleted" : true,
+      "outcome" : "COMMITTED",
+      "sqlState" : null,
+      "exceptionClass" : null
+    }, {
+      "workerId" : "T2",
+      "operationId" : "2655da25-4024-4040-a172-53d4e4844f07",
+      "attempt" : 1,
+      "pid" : 62,
+      "txId" : 755,
+      "updateOrder" : [ 2, 1 ],
+      "firstUpdateCompleted" : true,
+      "outcome" : "DEADLOCK_VICTIM",
+      "sqlState" : "40P01",
+      "exceptionClass" : "org.springframework.dao.PessimisticLockingFailureException"
+    } ]
+  }, {
+    "caseId" : "DL2",
+    "description" : "Consistent ascending ID lock ordering [1, 2] avoids deadlock under real contention",
+    "totalAttempts" : 2,
+    "committedOperations" : 2,
+    "deadlockVictims" : 0,
+    "counterA" : 2,
+    "counterB" : 2,
+    "operationMarkers" : 2,
+    "workers" : [ {
+      "workerId" : "T1",
+      "operationId" : "cad2d3a1-6d23-437e-b72f-cc7f9ab62eb2",
+      "attempt" : 1,
+      "pid" : 61,
+      "txId" : 744,
+      "updateOrder" : [ 1, 2 ],
+      "firstUpdateCompleted" : true,
+      "outcome" : "COMMITTED",
+      "sqlState" : null,
+      "exceptionClass" : null
+    }, {
+      "workerId" : "T2",
+      "operationId" : "a008db05-3b42-4dc3-992d-03391bbbfb32",
+      "attempt" : 1,
+      "pid" : 62,
+      "txId" : 745,
+      "updateOrder" : [ 1, 2 ],
+      "firstUpdateCompleted" : true,
+      "outcome" : "COMMITTED",
+      "sqlState" : null,
+      "exceptionClass" : null
+    } ]
+  }, {
+    "caseId" : "DL3",
+    "description" : "Whole-transaction retry of victim outside failed transaction boundary recovers invariants",
+    "totalAttempts" : 3,
+    "committedOperations" : 2,
+    "deadlockVictims" : 1,
+    "counterA" : 2,
+    "counterB" : 2,
+    "operationMarkers" : 2,
+    "workers" : [ {
+      "workerId" : "T1",
+      "operationId" : "3bffd57a-f573-4e43-a03f-e2685b713954",
+      "attempt" : 1,
+      "pid" : 61,
+      "txId" : 749,
+      "updateOrder" : [ 1, 2 ],
+      "firstUpdateCompleted" : true,
+      "outcome" : "DEADLOCK_VICTIM",
+      "sqlState" : "40P01",
+      "exceptionClass" : "org.springframework.dao.PessimisticLockingFailureException"
+    }, {
+      "workerId" : "T2",
+      "operationId" : "2264b3e9-eb38-4241-8ec3-402c86d1e3de",
+      "attempt" : 1,
+      "pid" : 62,
+      "txId" : 750,
+      "updateOrder" : [ 2, 1 ],
+      "firstUpdateCompleted" : true,
+      "outcome" : "COMMITTED",
+      "sqlState" : null,
+      "exceptionClass" : null
+    }, {
+      "workerId" : "T1-retry",
+      "operationId" : "3bffd57a-f573-4e43-a03f-e2685b713954",
+      "attempt" : 2,
+      "pid" : 63,
+      "txId" : 751,
+      "updateOrder" : [ 1, 2 ],
+      "firstUpdateCompleted" : true,
+      "outcome" : "COMMITTED",
+      "sqlState" : null,
+      "exceptionClass" : null
+    } ]
+  } ]
+}
