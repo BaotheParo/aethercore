@@ -137,7 +137,8 @@ class EvidenceCollector:
                 'propagation-observations.json': [f"PR{i}" for i in range(1, 7)],
                 'deadlock-observations.json': [f"DL{i}" for i in range(1, 4)],
                 'fetch-observations.json': [f"NQ{i}" for i in range(1, 6)],
-                'pagination-observations.json': [f"PG{i}" for i in range(1, 6)]
+                'pagination-observations.json': [f"PG{i}" for i in range(1, 6)],
+                'query-plan-observations.json': [f"EP{i}" for i in range(1, 5)]
             }
 
         validated = []
@@ -176,6 +177,9 @@ class EvidenceCollector:
                 # Special validation for pagination observations (Prompt 15)
                 elif filename == 'pagination-observations.json':
                     self._validate_pagination_scenario(case_id, s)
+                # Special validation for query plan observations (Prompt 16)
+                elif filename == 'query-plan-observations.json':
+                    self._validate_query_plan_scenario(case_id, s)
 
             for exp in expected_cases:
                 if exp not in found_cases:
@@ -247,6 +251,58 @@ class EvidenceCollector:
             if len(returned_ids) != len(result_rows):
                 raise ValidationError(f"Scenario {case_id} returnedBuyerIds count ({len(returned_ids)}) does not match resultRows count ({len(result_rows)})")
 
+    def _validate_query_plan_scenario(self, case_id, s):
+        for req_field in [
+            "queryId", "sqlTemplate", "params", "actualIndexInventory",
+            "resultSummary", "rawExplainAnalyzeJson", "nodeSummaries",
+            "rootMetrics", "hypothesis", "hypothesisStatus", "assertionsPassed"
+        ]:
+            if req_field not in s:
+                raise ValidationError(f"Scenario {case_id} missing required field '{req_field}' in query-plan-observations.json")
+
+        if s.get("assertionsPassed") is not True:
+            raise ValidationError(f"Scenario {case_id} assertionsPassed must be True")
+
+        hyp_status = s.get("hypothesisStatus")
+        if hyp_status not in ["MATCHED", "DIFFERENT"]:
+            raise ValidationError(f"Scenario {case_id} hypothesisStatus must be MATCHED or DIFFERENT, got '{hyp_status}'")
+
+        res_summary = s.get("resultSummary")
+        if not isinstance(res_summary, dict) or res_summary.get("validationPassed") is not True:
+            raise ValidationError(f"Scenario {case_id} resultSummary must have validationPassed=True")
+
+        raw_analyze = s.get("rawExplainAnalyzeJson")
+        if not raw_analyze:
+            raise ValidationError(f"Scenario {case_id} missing rawExplainAnalyzeJson")
+
+        plan_obj = None
+        if isinstance(raw_analyze, list) and len(raw_analyze) > 0 and isinstance(raw_analyze[0], dict):
+            plan_obj = raw_analyze[0].get("Plan")
+        elif isinstance(raw_analyze, dict):
+            plan_obj = raw_analyze.get("Plan")
+
+        if not isinstance(plan_obj, dict) or "Node Type" not in plan_obj:
+            raise ValidationError(f"Scenario {case_id} rawExplainAnalyzeJson must contain Plan with 'Node Type'")
+
+        if "Actual Rows" not in plan_obj and "Actual Loops" not in plan_obj:
+            raise ValidationError(f"Scenario {case_id} rawExplainAnalyzeJson must contain actual execution metrics")
+
+        if case_id == "EP1":
+            raw_only = s.get("rawExplainOnlyJson")
+            if not raw_only:
+                raise ValidationError(f"Scenario EP1 missing rawExplainOnlyJson")
+            plan_only = None
+            if isinstance(raw_only, list) and len(raw_only) > 0 and isinstance(raw_only[0], dict):
+                plan_only = raw_only[0].get("Plan")
+            elif isinstance(raw_only, dict):
+                plan_only = raw_only.get("Plan")
+            if not isinstance(plan_only, dict) or "Node Type" not in plan_only:
+                raise ValidationError(f"Scenario EP1 rawExplainOnlyJson must contain Plan with 'Node Type'")
+
+        node_summaries = s.get("nodeSummaries")
+        if not isinstance(node_summaries, list) or len(node_summaries) == 0:
+            raise ValidationError(f"Scenario {case_id} nodeSummaries must be a non-empty list")
+
     def generate_summary_text(self, core_res, backend_res, meta):
         total_core = core_res['total_tests']
         core_failures = core_res['total_failures']
@@ -263,12 +319,25 @@ class EvidenceCollector:
         total_errors = core_errors + backend_errors
         total_skipped = core_skipped + backend_skipped
 
-        if "exitCode" not in meta or meta["exitCode"] is None:
+        has_valid_exit = "exitCode" in meta and meta["exitCode"] is not None
+        exit_code = meta.get("exitCode")
+
+        if not has_valid_exit:
             reactor_status = "BUILD FAILURE (Exit Code: UNKNOWN/INVALID)"
-            reactor_exit = "UNKNOWN"
+        elif exit_code == 0 and total_failures == 0 and total_errors == 0 and total_skipped == 0:
+            reactor_status = "BUILD SUCCESS"
         else:
-            reactor_exit = meta['exitCode']
-            reactor_status = "BUILD SUCCESS" if (reactor_exit == 0 and total_failures == 0 and total_errors == 0) else f"BUILD FAILURE (Exit Code: {reactor_exit})"
+            reactor_status = f"BUILD FAILURE (Exit Code: {exit_code})"
+
+        is_all_pass = (
+            has_valid_exit
+            and exit_code == 0
+            and total_reactor > 0
+            and total_failures == 0
+            and total_errors == 0
+            and total_skipped == 0
+        )
+        reactor_verdict = "ALL PASS" if is_all_pass else "FAILURES DETECTED"
 
         summary = f"""================================================================================
 AETHERCORE SUREFIRE TEST EXECUTION SUMMARY - {self.prompt.upper()}
@@ -299,7 +368,7 @@ Total Tests Run: {total_core} | Failures: {core_failures} | Errors: {core_errors
 
         summary += f"""
 ================================================================================
-MODULE 2: backend-app (Spring Boot, Concurrency, JDBC, JPA, Propagation, Locking, Fetch, Pagination)
+MODULE 2: backend-app (Spring Boot, Concurrency, JDBC, JPA, Propagation, Locking, Fetch, Pagination, Query Plan)
 Total Test Classes: {len(backend_res['classes'])}
 Total Tests Run: {total_backend} | Failures: {backend_failures} | Errors: {backend_errors} | Skipped: {backend_skipped}
 --------------------------------------------------------------------------------
@@ -310,7 +379,7 @@ Total Tests Run: {total_backend} | Failures: {backend_failures} | Errors: {backe
 
         summary += f"""
 ================================================================================
-REACTOR TOTAL: {total_reactor} Tests Run | {total_failures} Failures | {total_errors} Errors | {total_skipped} Skipped | {"ALL PASS" if total_failures == 0 and total_errors == 0 else "FAILURES DETECTED"}
+REACTOR TOTAL: {total_reactor} Tests Run | {total_failures} Failures | {total_errors} Errors | {total_skipped} Skipped | {reactor_verdict}
 ================================================================================
 """
         return summary

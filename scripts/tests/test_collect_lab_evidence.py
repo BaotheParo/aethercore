@@ -81,6 +81,8 @@ class TestEvidenceCollector(unittest.TestCase):
         backend_res = {'total_tests': 5, 'total_failures': 0, 'total_errors': 0, 'total_skipped': 0, 'classes': {}}
         summary = self.collector.generate_summary_text(core_res, backend_res, meta)
         self.assertIn("BUILD FAILURE (Exit Code: 1)", summary)
+        self.assertNotIn("ALL PASS", summary)
+        self.assertIn("FAILURES DETECTED", summary)
 
     def test_observation_missing_case_or_wrong_runid(self):
         obs_dir = os.path.join(self.temp_dir, "obs")
@@ -173,6 +175,34 @@ class TestEvidenceCollector(unittest.TestCase):
         backend_res = {'total_tests': 1, 'total_failures': 0, 'total_errors': 0, 'total_skipped': 0, 'classes': {}}
         summary = self.collector.generate_summary_text(core_res, backend_res, meta_missing)
         self.assertIn("BUILD FAILURE (Exit Code: UNKNOWN/INVALID)", summary)
+        self.assertNotIn("ALL PASS", summary)
+        self.assertIn("FAILURES DETECTED", summary)
+
+    def test_skipped_tests_in_summary_cannot_be_all_pass(self):
+        meta = {
+            "runId": "run-skip",
+            "exitCode": 0,
+            "runtimeInfo": {}
+        }
+        core_res = {'total_tests': 5, 'total_failures': 0, 'total_errors': 0, 'total_skipped': 1, 'classes': {}}
+        backend_res = {'total_tests': 5, 'total_failures': 0, 'total_errors': 0, 'total_skipped': 0, 'classes': {}}
+        summary = self.collector.generate_summary_text(core_res, backend_res, meta)
+        self.assertIn("BUILD FAILURE (Exit Code: 0)", summary)
+        self.assertNotIn("ALL PASS", summary)
+        self.assertIn("FAILURES DETECTED", summary)
+
+    def test_valid_zero_exit_all_pass_control(self):
+        meta = {
+            "runId": "run-pass",
+            "exitCode": 0,
+            "runtimeInfo": {}
+        }
+        core_res = {'total_tests': 5, 'total_failures': 0, 'total_errors': 0, 'total_skipped': 0, 'classes': {}}
+        backend_res = {'total_tests': 5, 'total_failures': 0, 'total_errors': 0, 'total_skipped': 0, 'classes': {}}
+        summary = self.collector.generate_summary_text(core_res, backend_res, meta)
+        self.assertIn("BUILD SUCCESS", summary)
+        self.assertIn("ALL PASS", summary)
+        self.assertNotIn("FAILURES DETECTED", summary)
 
     def test_fetch_observations_payload_validation(self):
         obs_dir = os.path.join(self.temp_dir, "fetch-obs")
@@ -345,6 +375,143 @@ class TestEvidenceCollector(unittest.TestCase):
             required_sets={"pagination-observations.json": ["PG1", "PG2", "PG5"]}
         )
         self.assertEqual(validated, ["pagination-observations.json"])
+
+
+    def test_query_plan_observations_payload_validation(self):
+        obs_dir = os.path.join(self.temp_dir, "plan-obs")
+        os.makedirs(obs_dir, exist_ok=True)
+        plan_file = os.path.join(obs_dir, "query-plan-observations.json")
+
+        # 1. Missing rawExplainAnalyzeJson raises
+        bad_plan = {
+            "runId": "run-plan",
+            "scenarios": [
+                {
+                    "caseId": "EP1",
+                    "queryId": "Q1",
+                    "sqlTemplate": "select ...",
+                    "params": {"buyerId": 42},
+                    "actualIndexInventory": ["query_plan_trade_pkey"],
+                    "resultSummary": {"validationPassed": True, "rowCount": 5},
+                    "nodeSummaries": [{"nodeType": "Limit"}],
+                    "rootMetrics": {"totalCost": 10.0},
+                    "hypothesis": "Limit -> Sort -> Seq Scan",
+                    "hypothesisStatus": "MATCHED",
+                    "assertionsPassed": True
+                    # missing rawExplainAnalyzeJson
+                }
+            ]
+        }
+        with open(plan_file, "w", encoding="utf-8") as f:
+            json.dump(bad_plan, f)
+
+        with self.assertRaises(ValidationError) as ctx:
+            self.collector.validate_observations(obs_dir, run_id="run-plan", required_sets={"query-plan-observations.json": ["EP1"]})
+        self.assertIn("missing required field 'rawExplainAnalyzeJson'", str(ctx.exception))
+
+        # 2. Raw explain analyze missing actual metrics raises
+        bad_actual_metrics = {
+            "runId": "run-plan",
+            "scenarios": [
+                {
+                    "caseId": "EP1",
+                    "queryId": "Q1",
+                    "sqlTemplate": "select ...",
+                    "params": {"buyerId": 42},
+                    "actualIndexInventory": ["query_plan_trade_pkey"],
+                    "resultSummary": {"validationPassed": True, "rowCount": 5},
+                    "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Limit"}}], # missing Actual Rows
+                    "rawExplainOnlyJson": [{"Plan": {"Node Type": "Limit"}}],
+                    "nodeSummaries": [{"nodeType": "Limit"}],
+                    "rootMetrics": {"totalCost": 10.0},
+                    "hypothesis": "Limit -> Sort -> Seq Scan",
+                    "hypothesisStatus": "MATCHED",
+                    "assertionsPassed": True
+                }
+            ]
+        }
+        with open(plan_file, "w", encoding="utf-8") as f:
+            json.dump(bad_actual_metrics, f)
+
+        with self.assertRaises(ValidationError) as ctx:
+            self.collector.validate_observations(obs_dir, run_id="run-plan", required_sets={"query-plan-observations.json": ["EP1"]})
+        self.assertIn("must contain actual execution metrics", str(ctx.exception))
+
+        # 3. Valid EP1..EP4 payload with both MATCHED and DIFFERENT hypothesis status
+        valid_plan = {
+            "runId": "run-plan",
+            "scenarios": [
+                {
+                    "caseId": "EP1",
+                    "queryId": "Q1",
+                    "sqlTemplate": "select ...",
+                    "params": {"buyerId": 42},
+                    "actualIndexInventory": ["query_plan_trade_pkey"],
+                    "resultSummary": {"validationPassed": True, "rowCount": 5},
+                    "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Limit", "Actual Rows": 5, "Actual Loops": 1}}],
+                    "rawExplainOnlyJson": [{"Plan": {"Node Type": "Limit"}}],
+                    "nodeSummaries": [{"nodeType": "Limit"}],
+                    "rootMetrics": {"totalCost": 10.0, "actualRows": 5},
+                    "hypothesis": "Limit -> Sort -> Seq Scan",
+                    "hypothesisStatus": "MATCHED",
+                    "assertionsPassed": True
+                },
+                {
+                    "caseId": "EP2",
+                    "queryId": "Q1",
+                    "sqlTemplate": "select ...",
+                    "params": {"buyerId": 42},
+                    "actualIndexInventory": ["query_plan_trade_pkey", "idx_qpt_buyer"],
+                    "resultSummary": {"validationPassed": True, "rowCount": 5},
+                    "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Limit", "Actual Rows": 5, "Actual Loops": 1}}],
+                    "rawExplainOnlyJson": None,
+                    "nodeSummaries": [{"nodeType": "Limit"}],
+                    "rootMetrics": {"totalCost": 5.0, "actualRows": 5},
+                    "hypothesis": "Index Scan or Bitmap Heap Scan",
+                    "hypothesisStatus": "MATCHED",
+                    "assertionsPassed": True
+                },
+                {
+                    "caseId": "EP3",
+                    "queryId": "Q1",
+                    "sqlTemplate": "select ...",
+                    "params": {"buyerId": 42},
+                    "actualIndexInventory": ["query_plan_trade_pkey", "idx_qpt_buyer_status_recent"],
+                    "resultSummary": {"validationPassed": True, "rowCount": 5},
+                    "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Limit", "Actual Rows": 5, "Actual Loops": 1}}],
+                    "rawExplainOnlyJson": None,
+                    "nodeSummaries": [{"nodeType": "Limit"}],
+                    "rootMetrics": {"totalCost": 1.0, "actualRows": 5},
+                    "hypothesis": "Index Scan stopping at limit without separate Sort",
+                    "hypothesisStatus": "MATCHED",
+                    "assertionsPassed": True
+                },
+                {
+                    "caseId": "EP4",
+                    "queryId": "Q2",
+                    "sqlTemplate": "select ... where status = ?",
+                    "params": {"status": "COMPLETED"},
+                    "actualIndexInventory": ["query_plan_trade_pkey", "idx_qpt_status"],
+                    "resultSummary": {"validationPassed": True, "rowCount": 90000},
+                    "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Seq Scan", "Actual Rows": 90000, "Actual Loops": 1}}],
+                    "rawExplainOnlyJson": None,
+                    "nodeSummaries": [{"nodeType": "Seq Scan"}],
+                    "rootMetrics": {"totalCost": 2000.0, "actualRows": 90000},
+                    "hypothesis": "Seq Scan due to low selectivity",
+                    "hypothesisStatus": "DIFFERENT", # Allowed to be DIFFERENT without failing validation
+                    "assertionsPassed": True
+                }
+            ]
+        }
+        with open(plan_file, "w", encoding="utf-8") as f:
+            json.dump(valid_plan, f)
+
+        validated = self.collector.validate_observations(
+            obs_dir,
+            run_id="run-plan",
+            required_sets={"query-plan-observations.json": ["EP1", "EP2", "EP3", "EP4"]}
+        )
+        self.assertEqual(validated, ["query-plan-observations.json"])
 
 if __name__ == '__main__':
     unittest.main()

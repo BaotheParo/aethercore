@@ -307,14 +307,21 @@ public class JpaCollectionPaginationExperimentsTest {
                 Throwable cause = ex;
                 boolean foundHibernateRejection = false;
                 while (cause != null) {
-                    if (cause instanceof HibernateException ||
-                        (cause.getMessage() != null && cause.getMessage().toLowerCase().contains("collection fetch"))) {
-                        foundHibernateRejection = true;
-                        break;
+                    if (cause instanceof HibernateException && cause.getMessage() != null) {
+                        String msg = cause.getMessage().toLowerCase();
+                        boolean hasCollectionFetch = msg.contains("collection fetch");
+                        boolean hasPaginationGuard = msg.contains("pagination")
+                                || msg.contains("setfirstresult")
+                                || msg.contains("setmaxresults")
+                                || msg.contains("fail_on_pagination_over_collection_fetch");
+                        if (hasCollectionFetch && hasPaginationGuard) {
+                            foundHibernateRejection = true;
+                            break;
+                        }
                     }
                     cause = cause.getCause();
                 }
-                assertTrue(foundHibernateRejection, "Exception cause chain must indicate collection fetch rejection");
+                assertTrue(foundHibernateRejection, "Exception cause chain must contain HibernateException with collection fetch and pagination guard message");
             }
 
             long stmtCount = getStatementCount(strictEmf);

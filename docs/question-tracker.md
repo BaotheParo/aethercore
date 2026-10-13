@@ -57,6 +57,12 @@
 | **SQL51** | N+1 tầng JPA khác một JOIN SQL không hiệu quả thế nào | M2-E4A (NQ1..NQ4 so sánh query count) & M2-E4B (PG1 chứng minh 1 SQL JOIN collection tải toàn bộ dataset vào bộ nhớ so với PG3 hai bước; chưa execution-plan benchmark) | PARTIAL | VERIFIED (Hibernate/JPA / PostgreSQL 16) | AWAITING_CANDIDATE | - |
 | **SB54** | Collection fetch join cùng pagination | M2-E4B JpaCollectionPaginationExperimentsTest (PG1 in-memory pagination, PG2 fail-fast guard, PG3–PG5 two-step pagination) | FULL | VERIFIED (Hibernate/JPA / PostgreSQL 16) | AWAITING_CANDIDATE | - |
 | **SQL50** | Offset pagination và keyset khi bảng lớn | M2-E4B (PG3–PG5 kiểm chứng offset/limit trên scalar ID query kết hợp tiebreaker ordering; keyset chưa triển khai) | PARTIAL | VERIFIED (PostgreSQL 16) | AWAITING_CANDIDATE | - |
+| **SQL39** | Index tránh quét bảng; vì sao không index mọi cột | M2-E5A (EP1 vs EP2/EP3 chứng minh index giảm từ 2.440 blocks xuống 8 blocks; write overhead chưa đo) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **SQL40** | Index một cột, ghép, unique | M2-E5A (EP2 index đơn vs EP3 index ghép so sánh cơ chế lọc và sắp xếp; uniqueness chưa thí nghiệm) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **SQL41** | Thứ tự cột index ghép ảnh hưởng query | M2-E5A (EP3 kiểm chứng thứ tự (buyer_id, status, created_at DESC, id DESC) phục vụ cả lọc và sort; chưa hoán vị mọi thứ tự) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **SQL43** | Có index nhưng optimizer chọn scan | M2-E5A (EP4 kiểm chứng thực tế PostgreSQL chọn Seq Scan thay vì idx_qpt_status khi query lấy 90% bảng và cần cột payload) | FULL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **SQL46** | EXPLAIN; estimated rows vs actual | M2-E5A (EP1..EP4 trích xuất EXPLAIN FORMAT JSON, so sánh Plan Rows vs Actual Rows và Estimated Cost vs Execution Time) | FULL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **SQL47** | Đọc EXPLAIN ANALYZE tìm bước tốn thời gian | M2-E5A (EP1..EP4 phân tích cây node từ root đến scan, tìm bước tốn chi phí Sort/Scan; cấu hình TIMING OFF chưa đo thời gian từng node riêng) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
 
 ---
 
