@@ -1,0 +1,155 @@
+{
+  "schemaVersion" : "1.0.0",
+  "runId" : "prompt17-20261013-191256-f0cf3e",
+  "environment" : "Java SE JPA / Hibernate 6.5.3.Final / PostgreSQL 16.15",
+  "timestamp" : "2026-10-13T12:13:39.325629Z",
+  "settings" : {
+    "unsafeEmf" : {
+      "failOnPaginationOverCollectionFetch" : false,
+      "batchFetchSize" : 0,
+      "cacheEnabled" : false
+    },
+    "strictEmf" : {
+      "failOnPaginationOverCollectionFetch" : true,
+      "batchFetchSize" : 0,
+      "cacheEnabled" : false
+    }
+  },
+  "scenarios" : [ {
+    "caseId" : "PG1",
+    "strategy" : "Collection fetch with in-memory pagination (lenient)",
+    "offset" : 0,
+    "pageSize" : 2,
+    "policyEnabled" : false,
+    "outcome" : "RETURNED_PAGE",
+    "selectedIdsPhase1" : null,
+    "returnedBuyerIds" : [ 1, 2 ],
+    "resultRows" : [ {
+      "buyerId" : 1,
+      "buyerName" : "Trader",
+      "orders" : [ {
+        "orderId" : 101,
+        "quantity" : 1
+      }, {
+        "orderId" : 102,
+        "quantity" : 1
+      }, {
+        "orderId" : 103,
+        "quantity" : 1
+      } ]
+    }, {
+      "buyerId" : 2,
+      "buyerName" : "Trader",
+      "orders" : [ ]
+    } ],
+    "preparedStatementCount" : 1,
+    "buyerEntityLoadCount" : 5,
+    "orderEntityLoadCount" : 10,
+    "sqlStatements" : [ "select fb1_0.id,fb1_0.name,o1_0.buyer_id,o1_0.id,o1_0.quantity from fetch_buyer fb1_0 left join fetch_order o1_0 on fb1_0.id=o1_0.buyer_id order by fb1_0.name,fb1_0.id" ],
+    "exceptionClass" : null,
+    "exceptionMessage" : null,
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "PG2",
+    "strategy" : "Strict fail-fast guard rejection",
+    "offset" : 0,
+    "pageSize" : 2,
+    "policyEnabled" : true,
+    "outcome" : "EXPECTED_REJECTION",
+    "selectedIdsPhase1" : null,
+    "returnedBuyerIds" : [ ],
+    "resultRows" : [ ],
+    "preparedStatementCount" : 0,
+    "buyerEntityLoadCount" : 0,
+    "orderEntityLoadCount" : 0,
+    "sqlStatements" : [ ],
+    "exceptionClass" : "org.hibernate.HibernateException",
+    "exceptionMessage" : "setFirstResult() or setMaxResults() specified with collection fetch join (in-memory pagination was about to be applied, but 'hibernate.query.fail_on_pagination_over_collection_fetch' is enabled)",
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "PG3",
+    "strategy" : "Two-step pagination (page 0)",
+    "offset" : 0,
+    "pageSize" : 2,
+    "policyEnabled" : true,
+    "outcome" : "RETURNED_PAGE",
+    "selectedIdsPhase1" : [ 1, 2 ],
+    "returnedBuyerIds" : [ 1, 2 ],
+    "resultRows" : [ {
+      "buyerId" : 1,
+      "buyerName" : "Trader",
+      "orders" : [ {
+        "orderId" : 101,
+        "quantity" : 1
+      }, {
+        "orderId" : 102,
+        "quantity" : 1
+      }, {
+        "orderId" : 103,
+        "quantity" : 1
+      } ]
+    }, {
+      "buyerId" : 2,
+      "buyerName" : "Trader",
+      "orders" : [ ]
+    } ],
+    "preparedStatementCount" : 2,
+    "buyerEntityLoadCount" : 2,
+    "orderEntityLoadCount" : 3,
+    "sqlStatements" : [ "select fb1_0.id from fetch_buyer fb1_0 order by fb1_0.name,fb1_0.id offset ? rows fetch first ? rows only", "select fb1_0.id,fb1_0.name,o1_0.buyer_id,o1_0.id,o1_0.quantity from fetch_buyer fb1_0 left join fetch_order o1_0 on fb1_0.id=o1_0.buyer_id where fb1_0.id in (?,?)" ],
+    "exceptionClass" : null,
+    "exceptionMessage" : null,
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "PG4",
+    "strategy" : "Two-step pagination (page 1)",
+    "offset" : 2,
+    "pageSize" : 2,
+    "policyEnabled" : true,
+    "outcome" : "RETURNED_PAGE",
+    "selectedIdsPhase1" : [ 3, 4 ],
+    "returnedBuyerIds" : [ 3, 4 ],
+    "resultRows" : [ {
+      "buyerId" : 3,
+      "buyerName" : "Trader",
+      "orders" : [ {
+        "orderId" : 301,
+        "quantity" : 1
+      }, {
+        "orderId" : 302,
+        "quantity" : 1
+      } ]
+    }, {
+      "buyerId" : 4,
+      "buyerName" : "Trader",
+      "orders" : [ {
+        "orderId" : 401,
+        "quantity" : 1
+      } ]
+    } ],
+    "preparedStatementCount" : 2,
+    "buyerEntityLoadCount" : 2,
+    "orderEntityLoadCount" : 3,
+    "sqlStatements" : [ "select fb1_0.id from fetch_buyer fb1_0 order by fb1_0.name,fb1_0.id offset ? rows fetch first ? rows only", "select fb1_0.id,fb1_0.name,o1_0.buyer_id,o1_0.id,o1_0.quantity from fetch_buyer fb1_0 left join fetch_order o1_0 on fb1_0.id=o1_0.buyer_id where fb1_0.id in (?,?)" ],
+    "exceptionClass" : null,
+    "exceptionMessage" : null,
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "PG5",
+    "strategy" : "Two-step pagination (empty page short-circuit)",
+    "offset" : 99,
+    "pageSize" : 2,
+    "policyEnabled" : true,
+    "outcome" : "RETURNED_PAGE",
+    "selectedIdsPhase1" : [ ],
+    "returnedBuyerIds" : [ ],
+    "resultRows" : [ ],
+    "preparedStatementCount" : 1,
+    "buyerEntityLoadCount" : 0,
+    "orderEntityLoadCount" : 0,
+    "sqlStatements" : [ "select fb1_0.id from fetch_buyer fb1_0 order by fb1_0.name,fb1_0.id offset ? rows fetch first ? rows only" ],
+    "exceptionClass" : null,
+    "exceptionMessage" : null,
+    "assertionsPassed" : true
+  } ]
+}

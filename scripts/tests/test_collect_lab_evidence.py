@@ -513,5 +513,133 @@ class TestEvidenceCollector(unittest.TestCase):
         )
         self.assertEqual(validated, ["query-plan-observations.json"])
 
+    def test_keyset_pagination_observations_payload_validation(self):
+        obs_dir = os.path.join(self.temp_dir, "keyset-obs")
+        os.makedirs(obs_dir, exist_ok=True)
+        keyset_file = os.path.join(obs_dir, "keyset-pagination-observations.json")
+
+        # 1. KP1 missing rawExplainAnalyzeJson raises
+        bad_kp1 = {
+            "runId": "run-keyset",
+            "scenarios": [
+                {
+                    "caseId": "KP1",
+                    "pageSize": 20,
+                    "assertionsPassed": True,
+                    "deepPagesEqual": True,
+                    "returnedIds": {
+                        "firstPage": list(range(20)),
+                        "deepOffset": list(range(20)),
+                        "deepKeyset": list(range(20))
+                    },
+                    "measurements": {
+                        "first_page": {"sql": "select", "params": {}, "returnedIds": list(range(20)), "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Limit", "Actual Rows": 20, "Actual Loops": 1}}]},
+                        "deep_offset": {"sql": "select", "params": {}, "returnedIds": list(range(20)), "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Limit", "Actual Rows": 20, "Actual Loops": 1}}]},
+                        "deep_keyset": {"sql": "select", "params": {}, "returnedIds": list(range(20))} # missing raw plan
+                    },
+                    "hypothesisStatus": "MATCHED"
+                }
+            ]
+        }
+        with open(keyset_file, "w", encoding="utf-8") as f:
+            json.dump(bad_kp1, f)
+
+        with self.assertRaises(ValidationError) as ctx:
+            self.collector.validate_observations(obs_dir, run_id="run-keyset", required_sets={"keyset-pagination-observations.json": ["KP1"]})
+        self.assertIn("missing rawExplainAnalyzeJson", str(ctx.exception))
+
+        # 2. KP1 deep offset IDs mismatch deep keyset IDs raises
+        mismatch_kp1 = {
+            "runId": "run-keyset",
+            "scenarios": [
+                {
+                    "caseId": "KP1",
+                    "pageSize": 20,
+                    "assertionsPassed": True,
+                    "deepPagesEqual": True,
+                    "returnedIds": {
+                        "firstPage": list(range(20)),
+                        "deepOffset": list(range(20)),
+                        "deepKeyset": list(range(1, 21)) # mismatch!
+                    },
+                    "measurements": {
+                        "first_page": {"sql": "select", "params": {}, "returnedIds": list(range(20)), "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Limit", "Actual Rows": 20, "Actual Loops": 1}}]},
+                        "deep_offset": {"sql": "select", "params": {}, "returnedIds": list(range(20)), "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Limit", "Actual Rows": 20, "Actual Loops": 1}}]},
+                        "deep_keyset": {"sql": "select", "params": {}, "returnedIds": list(range(20)), "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Limit", "Actual Rows": 20, "Actual Loops": 1}}]}
+                    },
+                    "hypothesisStatus": "MATCHED"
+                }
+            ]
+        }
+        with open(keyset_file, "w", encoding="utf-8") as f:
+            json.dump(mismatch_kp1, f)
+
+        with self.assertRaises(ValidationError) as ctx:
+            self.collector.validate_observations(obs_dir, run_id="run-keyset", required_sets={"keyset-pagination-observations.json": ["KP1"]})
+        self.assertIn("must be non-empty and strictly equal", str(ctx.exception))
+
+        # 3. Valid KP1..KP4 payload passes
+        valid_keyset = {
+            "runId": "run-keyset",
+            "scenarios": [
+                {
+                    "caseId": "KP1",
+                    "pageSize": 20,
+                    "assertionsPassed": True,
+                    "deepPagesEqual": True,
+                    "returnedIds": {
+                        "firstPage": list(range(20)),
+                        "deepOffset": list(range(20)),
+                        "deepKeyset": list(range(20))
+                    },
+                    "measurements": {
+                        "first_page": {"sql": "select", "params": {}, "returnedIds": list(range(20)), "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Limit", "Actual Rows": 20, "Actual Loops": 1}}]},
+                        "deep_offset": {"sql": "select", "params": {}, "returnedIds": list(range(20)), "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Limit", "Actual Rows": 20, "Actual Loops": 1}}]},
+                        "deep_keyset": {"sql": "select", "params": {}, "returnedIds": list(range(20)), "rawExplainAnalyzeJson": [{"Plan": {"Node Type": "Limit", "Actual Rows": 20, "Actual Loops": 1}}]}
+                    },
+                    "hypothesisStatus": "MATCHED"
+                },
+                {
+                    "caseId": "KP2",
+                    "pageSize": 7,
+                    "assertionsPassed": True,
+                    "page1Ids": list(range(7)),
+                    "brokenPage2Ids": list(range(7)),
+                    "correctPage2Ids": list(range(7)),
+                    "fullTraversalIds": list(range(24)),
+                    "fullTraversalPageSizes": [7, 7, 7, 3]
+                },
+                {
+                    "caseId": "KP3",
+                    "pageSize": 5,
+                    "assertionsPassed": True,
+                    "page1Ids": list(range(5)),
+                    "offsetPage2Ids": list(range(5)),
+                    "keysetPage2Ids": list(range(5)),
+                    "offsetDuplicateId": 20,
+                    "keysetHasDuplicate": False
+                },
+                {
+                    "caseId": "KP4",
+                    "pageSize": 5,
+                    "assertionsPassed": True,
+                    "page1Ids": list(range(5)),
+                    "offsetPage2Ids": list(range(5)),
+                    "keysetPage2Ids": list(range(5)),
+                    "offsetSkippedId": 19,
+                    "keysetHasSkipped": False
+                }
+            ]
+        }
+        with open(keyset_file, "w", encoding="utf-8") as f:
+            json.dump(valid_keyset, f)
+
+        validated = self.collector.validate_observations(
+            obs_dir,
+            run_id="run-keyset",
+            required_sets={"keyset-pagination-observations.json": ["KP1", "KP2", "KP3", "KP4"]}
+        )
+        self.assertEqual(validated, ["keyset-pagination-observations.json"])
+
 if __name__ == '__main__':
     unittest.main()

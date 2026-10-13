@@ -1,0 +1,583 @@
+[INFO] Scanning for projects...
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Build Order:
+[INFO]
+[INFO] AetherCore Parent                                                  [pom]
+[INFO] AetherCore :: Core Lab                                             [jar]
+[INFO] AetherCore :: Backend App                                          [jar]
+[INFO]
+[INFO] ------------------< com.aethercore:aethercore-parent >------------------
+[INFO] Building AetherCore Parent 0.0.1-SNAPSHOT                          [1/3]
+[INFO]   from pom.xml
+[INFO] --------------------------------[ pom ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ aethercore-parent ---
+[INFO]
+[INFO] ----------------------< com.aethercore:core-lab >-----------------------
+[INFO] Building AetherCore :: Core Lab 0.0.1-SNAPSHOT                     [2/3]
+[INFO]   from core-lab\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ core-lab ---
+[INFO] Deleting D:\Project CV\INTERVIEW\aethercore\core-lab\target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ core-lab ---
+[INFO] skip non existing resourceDirectory D:\Project CV\INTERVIEW\aethercore\core-lab\src\main\resources
+[INFO]
+[INFO] --- compiler:3.13.0:compile (default-compile) @ core-lab ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 13 source files with javac [debug release 21] to target\classes
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ core-lab ---
+[INFO] skip non existing resourceDirectory D:\Project CV\INTERVIEW\aethercore\core-lab\src\test\resources
+[INFO]
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ core-lab ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 5 source files with javac [debug release 21] to target\test-classes
+[INFO]
+[INFO] --- surefire:3.5.0:test (default-test) @ core-lab ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO]
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.aethercore.core.m1e1.PlayerKeyExperimentsTest
+[INFO] Running com.aethercore.core.m1e1.PlayerKeyExperimentsTest$VariantDTests
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.058 s -- in com.aethercore.core.m1e1.PlayerKeyExperimentsTest$VariantDTests
+[INFO] Running com.aethercore.core.m1e1.PlayerKeyExperimentsTest$VariantCTests
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.014 s -- in com.aethercore.core.m1e1.PlayerKeyExperimentsTest$VariantCTests
+[INFO] Running com.aethercore.core.m1e1.PlayerKeyExperimentsTest$VariantBTests
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.005 s -- in com.aethercore.core.m1e1.PlayerKeyExperimentsTest$VariantBTests
+[INFO] Running com.aethercore.core.m1e1.PlayerKeyExperimentsTest$VariantATests
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.009 s -- in com.aethercore.core.m1e1.PlayerKeyExperimentsTest$VariantATests
+[INFO] Tests run: 0, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.120 s -- in com.aethercore.core.m1e1.PlayerKeyExperimentsTest
+[INFO] Running com.aethercore.core.m1e3.RecordExperimentsTest
+[INFO] Running com.aethercore.core.m1e3.RecordExperimentsTest$ShallowImmutabilityTests
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.015 s -- in com.aethercore.core.m1e3.RecordExperimentsTest$ShallowImmutabilityTests
+[INFO] Running com.aethercore.core.m1e3.RecordExperimentsTest$CharacterStatsTests
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.121 s -- in com.aethercore.core.m1e3.RecordExperimentsTest$CharacterStatsTests
+[INFO] Tests run: 0, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.143 s -- in com.aethercore.core.m1e3.RecordExperimentsTest
+[INFO] Running com.aethercore.core.m1e3.WrapperAndPrecisionExperimentsTest
+[INFO] Running com.aethercore.core.m1e3.WrapperAndPrecisionExperimentsTest$ScaleAndCalculatorTests
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.018 s -- in com.aethercore.core.m1e3.WrapperAndPrecisionExperimentsTest$ScaleAndCalculatorTests
+[INFO] Running com.aethercore.core.m1e3.WrapperAndPrecisionExperimentsTest$BigDecimalCreationTests
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.011 s -- in com.aethercore.core.m1e3.WrapperAndPrecisionExperimentsTest$BigDecimalCreationTests
+[INFO] Running com.aethercore.core.m1e3.WrapperAndPrecisionExperimentsTest$IntegerCacheTests
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.004 s -- in com.aethercore.core.m1e3.WrapperAndPrecisionExperimentsTest$IntegerCacheTests
+[INFO] Running com.aethercore.core.m1e3.WrapperAndPrecisionExperimentsTest$PrimitiveWrapperTests
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.011 s -- in com.aethercore.core.m1e3.WrapperAndPrecisionExperimentsTest$PrimitiveWrapperTests
+[INFO] Tests run: 0, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.052 s -- in com.aethercore.core.m1e3.WrapperAndPrecisionExperimentsTest
+[INFO] Running com.aethercore.core.m1e4.DamageStrategyExperimentsTest
+[INFO] Running com.aethercore.core.m1e4.DamageStrategyExperimentsTest$MethodDispatchTests
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.004 s -- in com.aethercore.core.m1e4.DamageStrategyExperimentsTest$MethodDispatchTests
+[INFO] Running com.aethercore.core.m1e4.DamageStrategyExperimentsTest$DamageCalculatorTests
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.009 s -- in com.aethercore.core.m1e4.DamageStrategyExperimentsTest$DamageCalculatorTests
+[INFO] Running com.aethercore.core.m1e4.DamageStrategyExperimentsTest$StrategyCalculationTests
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.008 s -- in com.aethercore.core.m1e4.DamageStrategyExperimentsTest$StrategyCalculationTests
+[INFO] Tests run: 0, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.027 s -- in com.aethercore.core.m1e4.DamageStrategyExperimentsTest
+[INFO]
+[INFO] Results:
+[INFO]
+[INFO] Tests run: 34, Failures: 0, Errors: 0, Skipped: 0
+[INFO]
+[INFO]
+[INFO] ---------------------< com.aethercore:backend-app >---------------------
+[INFO] Building AetherCore :: Backend App 0.0.1-SNAPSHOT                  [3/3]
+[INFO]   from backend-app\pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO]
+[INFO] --- clean:3.2.0:clean (default-clean) @ backend-app ---
+[INFO] Deleting D:\Project CV\INTERVIEW\aethercore\backend-app\target
+[INFO]
+[INFO] --- resources:3.3.1:resources (default-resources) @ backend-app ---
+[INFO] Copying 5 resources from src\main\resources to target\classes
+[INFO]
+[INFO] --- compiler:3.13.0:compile (default-compile) @ backend-app ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 10 source files with javac [debug release 21] to target\classes
+[INFO]
+[INFO] --- resources:3.3.1:testResources (default-testResources) @ backend-app ---
+[INFO] Copying 6 resources from src\test\resources to target\test-classes
+[INFO]
+[INFO] --- compiler:3.13.0:testCompile (default-testCompile) @ backend-app ---
+[INFO] Recompiling the module because of changed dependency.
+[INFO] Compiling 24 source files with javac [debug release 21] to target\test-classes
+[INFO]
+[INFO] --- surefire:3.5.0:test (default-test) @ backend-app ---
+[INFO] Using auto detected provider org.apache.maven.surefire.junitplatform.JUnitPlatformProvider
+[INFO]
+[INFO] -------------------------------------------------------
+[INFO]  T E S T S
+[INFO] -------------------------------------------------------
+[INFO] Running com.aethercore.backend.damage.DamageStrategyWiringTest
+19:13:08.226 [main] WARN org.springframework.context.annotation.AnnotationConfigApplicationContext -- Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'ambiguousDamageService' defined in com.aethercore.backend.damage.DamageStrategyWiringTest$AmbiguousConfig: Unsatisfied dependency expressed through method 'ambiguousDamageService' parameter 0: No qualifying bean of type 'com.aethercore.core.m1e4.DamageStrategy' available: expected single matching bean but found 2: physicalDamageStrategy,magicalDamageStrategy
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.552 s -- in com.aethercore.backend.damage.DamageStrategyWiringTest
+[INFO] Running com.aethercore.backend.fetch.JpaFetchExperimentsTest
+19:13:08.433 [main] INFO org.testcontainers.images.PullPolicy -- Image pull policy will be performed by: DefaultPullPolicy()
+19:13:08.441 [main] INFO org.testcontainers.utility.ImageNameSubstitutor -- Image name substitution will be performed by: DefaultImageNameSubstitutor (composite of 'ConfigurationFileImageNameSubstitutor' and 'PrefixingImageNameSubstitutor')
+19:13:08.527 [main] INFO org.testcontainers.DockerClientFactory -- Testcontainers version: 1.21.4
+19:13:08.750 [main] INFO org.testcontainers.dockerclient.DockerClientProviderStrategy -- Loaded org.testcontainers.dockerclient.NpipeSocketClientProviderStrategy from ~/.testcontainers.properties, will try it first
+19:13:09.083 [main] INFO org.testcontainers.dockerclient.DockerClientProviderStrategy -- Found Docker environment with local Npipe socket (npipe:////./pipe/docker_engine)
+19:13:09.084 [main] INFO org.testcontainers.DockerClientFactory -- Docker host IP address is localhost
+19:13:09.111 [main] INFO org.testcontainers.DockerClientFactory -- Connected to docker:
+  Server Version: 29.5.3
+  API Version: 1.54
+  Operating System: Docker Desktop (containerized)
+  Total Memory: 7830 MB
+  Labels:
+    com.docker.desktop.address=npipe://\\.\pipe\docker_cli
+19:13:09.254 [main] INFO tc.testcontainers/ryuk:0.12.0 -- Creating container for image: testcontainers/ryuk:0.12.0
+19:13:09.383 [main] INFO org.testcontainers.utility.RegistryAuthLocator -- Credential helper/store (docker-credential-desktop) does not have credentials for https://index.docker.io/v1/
+19:13:09.609 [main] INFO tc.testcontainers/ryuk:0.12.0 -- Container testcontainers/ryuk:0.12.0 is starting: 143a914158500a2e2193c584413be1af7e98cda8edf66b046441e538c3eb5c26
+19:13:10.157 [main] INFO tc.testcontainers/ryuk:0.12.0 -- Container testcontainers/ryuk:0.12.0 started in PT0.9029534S
+19:13:10.168 [main] INFO org.testcontainers.utility.RyukResourceReaper -- Ryuk started - will monitor and terminate Testcontainers containers on JVM exit
+19:13:10.168 [main] INFO org.testcontainers.DockerClientFactory -- Checking the system...
+19:13:10.169 [main] INFO org.testcontainers.DockerClientFactory -- ?? Docker server version should be at least 1.6.0
+19:13:10.170 [main] INFO tc.postgres:16-alpine -- Creating container for image: postgres:16-alpine
+19:13:10.278 [main] INFO tc.postgres:16-alpine -- Container postgres:16-alpine is starting: 55096367d739bbf287f80bff5f2e630e53702acc4f64fdc959447173cf208885
+19:13:12.119 [main] INFO tc.postgres:16-alpine -- Container postgres:16-alpine started in PT1.9482461S
+19:13:12.126 [main] INFO tc.postgres:16-alpine -- Container is started (JDBC URL: jdbc:postgresql://localhost:49641/aethercore_fetch_test?loggerLevel=OFF)
+19:13:12.606 [main] INFO org.hibernate.jpa.internal.util.LogHelper -- HHH000204: Processing PersistenceUnitInfo [name: aethercore-fetch-jpa-test]
+19:13:12.688 [main] INFO org.hibernate.Version -- HHH000412: Hibernate ORM core version 6.5.3.Final
+19:13:12.730 [main] INFO org.hibernate.cache.internal.RegionFactoryInitiator -- HHH000026: Second-level cache disabled
+19:13:12.951 [main] WARN org.hibernate.orm.connections.pooling -- HHH10001002: Using built-in connection pool (not intended for production use)
+19:13:12.951 [main] INFO org.hibernate.orm.connections.pooling -- HHH10001005: Loaded JDBC driver class: org.postgresql.Driver
+19:13:12.951 [main] INFO org.hibernate.orm.connections.pooling -- HHH10001012: Connecting with JDBC URL [jdbc:postgresql://localhost:49641/aethercore_fetch_test?loggerLevel=OFF]
+19:13:12.951 [main] INFO org.hibernate.orm.connections.pooling -- HHH10001001: Connection properties: {password=****, user=test}
+19:13:12.951 [main] INFO org.hibernate.orm.connections.pooling -- HHH10001003: Autocommit mode: false
+19:13:12.954 [main] INFO org.hibernate.orm.connections.pooling -- HHH10001115: Connection pool size: 20 (min=1)
+19:13:13.033 [main] WARN org.hibernate.orm.deprecation -- HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+19:13:14.506 [main] INFO org.hibernate.engine.transaction.jta.platform.internal.JtaPlatformInitiator -- HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+19:13:14.526 [main] INFO org.hibernate.orm.connections.access -- HHH10001501: Connection obtained from JdbcConnectionAccess [org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator$ConnectionProviderJdbcConnectionAccess@c6d7256] for (non-JTA) DDL execution was not in auto-commit mode; the Connection 'local transaction' will be committed and the Connection will be set into auto-commit mode.
+19:13:15.049 [main] INFO org.hibernate.engine.internal.StatisticalLoggingSessionEventListener -- Session Metrics {
+    58100 nanoseconds spent acquiring 1 JDBC connections;
+    33100 nanoseconds spent releasing 1 JDBC connections;
+    673500 nanoseconds spent preparing 7 JDBC statements;
+    8483300 nanoseconds spent executing 7 JDBC statements;
+    0 nanoseconds spent executing 0 JDBC batches;
+    0 nanoseconds spent performing 0 L2C puts;
+    0 nanoseconds spent performing 0 L2C hits;
+    0 nanoseconds spent performing 0 L2C misses;
+    12027000 nanoseconds spent executing 1 flushes (flushing a total of 12 entities and 6 collections);
+    24749900790301 nanoseconds spent executing 1 pre-partial-flushes;
+    14800 nanoseconds spent executing 1 partial-flushes (flushing a total of 0 entities and 0 collections)
+}
+19:13:15.150 [main] INFO org.hibernate.engine.internal.StatisticalLoggingSessionEventListener -- Session Metrics {
+    42500 nanoseconds spent acquiring 1 JDBC connections;
+    52600 nanoseconds spent releasing 1 JDBC connections;
+    176500 nanoseconds spent preparing 1 JDBC statements;
+    2029400 nanoseconds spent executing 1 JDBC statements;
+    0 nanoseconds spent executing 0 JDBC batches;
+    0 nanoseconds spent performing 0 L2C puts;
+    0 nanoseconds spent performing 0 L2C hits;
+    0 nanoseconds spent performing 0 L2C misses;
+    1283300 nanoseconds spent executing 1 flushes (flushing a total of 12 entities and 6 collections);
+    24750120590801 nanoseconds spent executing 1 pre-partial-flushes;
+    8900 nanoseconds spent executing 1 partial-flushes (flushing a total of 0 entities and 0 collections)
+}
+19:13:15.202 [main] INFO org.hibernate.engine.internal.StatisticalLoggingSessionEventListener -- Session Metrics {
+    41700 nanoseconds spent acquiring 1 JDBC connections;
+    37800 nanoseconds spent releasing 1 JDBC connections;
+    90900 nanoseconds spent preparing 1 JDBC statements;
+    1664900 nanoseconds spent executing 1 JDBC statements;
+    0 nanoseconds spent executing 0 JDBC batches;
+    0 nanoseconds spent performing 0 L2C puts;
+    0 nanoseconds spent performing 0 L2C hits;
+    0 nanoseconds spent performing 0 L2C misses;
+    698800 nanoseconds spent executing 1 flushes (flushing a total of 12 entities and 6 collections);
+    24750180361301 nanoseconds spent executing 1 pre-partial-flushes;
+    7200 nanoseconds spent executing 1 partial-flushes (flushing a total of 0 entities and 0 collections)
+}
+19:13:15.309 [main] INFO org.hibernate.engine.internal.StatisticalLoggingSessionEventListener -- Session Metrics {
+    40600 nanoseconds spent acquiring 1 JDBC connections;
+    32900 nanoseconds spent releasing 1 JDBC connections;
+    156700 nanoseconds spent preparing 1 JDBC statements;
+    1652400 nanoseconds spent executing 1 JDBC statements;
+    0 nanoseconds spent executing 0 JDBC batches;
+    0 nanoseconds spent performing 0 L2C puts;
+    0 nanoseconds spent performing 0 L2C hits;
+    0 nanoseconds spent performing 0 L2C misses;
+    0 nanoseconds spent executing 0 flushes (flushing a total of 0 entities and 0 collections);
+    24750282200501 nanoseconds spent executing 1 pre-partial-flushes;
+    7900 nanoseconds spent executing 1 partial-flushes (flushing a total of 0 entities and 0 collections)
+}
+19:13:15.348 [main] INFO org.hibernate.engine.internal.StatisticalLoggingSessionEventListener -- Session Metrics {
+    34100 nanoseconds spent acquiring 1 JDBC connections;
+    24200 nanoseconds spent releasing 1 JDBC connections;
+    161400 nanoseconds spent preparing 4 JDBC statements;
+    3462800 nanoseconds spent executing 4 JDBC statements;
+    0 nanoseconds spent executing 0 JDBC batches;
+    0 nanoseconds spent performing 0 L2C puts;
+    0 nanoseconds spent performing 0 L2C hits;
+    0 nanoseconds spent performing 0 L2C misses;
+    381700 nanoseconds spent executing 1 flushes (flushing a total of 9 entities and 3 collections);
+    24750326673701 nanoseconds spent executing 1 pre-partial-flushes;
+    10600 nanoseconds spent executing 1 partial-flushes (flushing a total of 0 entities and 0 collections)
+}
+19:13:15.388 [main] INFO org.hibernate.orm.connections.pooling -- HHH10001008: Cleaning up connection pool [jdbc:postgresql://localhost:49641/aethercore_fetch_test?loggerLevel=OFF]
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 7.373 s -- in com.aethercore.backend.fetch.JpaFetchExperimentsTest
+[INFO] Running com.aethercore.backend.LabEntryIntegrationTest
+19:13:15.811 [main] INFO org.springframework.test.context.support.AnnotationConfigContextLoaderUtils -- Could not detect default configuration classes for test class [com.aethercore.backend.LabEntryIntegrationTest]: LabEntryIntegrationTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+19:13:15.905 [main] INFO org.springframework.boot.test.context.SpringBootTestContextBootstrapper -- Found @SpringBootConfiguration com.aethercore.backend.AetherCoreApplication for test class com.aethercore.backend.LabEntryIntegrationTest
+19:13:16.043 [main] INFO tc.postgres:16-alpine -- Creating container for image: postgres:16-alpine
+19:13:16.139 [main] INFO tc.postgres:16-alpine -- Container postgres:16-alpine is starting: 0d8db0e35eaedf50b397959f44ae0d8f1668633cc08c62bdfdb522d3689dc993
+19:13:17.875 [main] INFO tc.postgres:16-alpine -- Container postgres:16-alpine started in PT1.8321132S
+19:13:17.876 [main] INFO tc.postgres:16-alpine -- Container is started (JDBC URL: jdbc:postgresql://localhost:49543/aethercore_test?loggerLevel=OFF)
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.4)
+
+2026-10-13T19:13:18.262+07:00  INFO 17136 --- [backend-app] [           main] c.a.backend.LabEntryIntegrationTest      : Starting LabEntryIntegrationTest using Java 22 with PID 17136 (started by ThaiSon in D:\Project CV\INTERVIEW\aethercore\backend-app)
+2026-10-13T19:13:18.263+07:00  INFO 17136 --- [backend-app] [           main] c.a.backend.LabEntryIntegrationTest      : No active profile set, falling back to 1 default profile: "default"
+2026-10-13T19:13:19.394+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...
+2026-10-13T19:13:19.421+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection org.postgresql.jdbc.PgConnection@473048f9
+2026-10-13T19:13:19.423+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.
+2026-10-13T19:13:19.454+07:00  INFO 17136 --- [backend-app] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:49543/aethercore_test (PostgreSQL 16.15)
+2026-10-13T19:13:19.506+07:00  INFO 17136 --- [backend-app] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-10-13T19:13:19.510+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 4 migrations (execution time 00:00.032s)
+2026-10-13T19:13:19.526+07:00  INFO 17136 --- [backend-app] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-10-13T19:13:19.570+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-10-13T19:13:19.578+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - create lab entry table"
+2026-10-13T19:13:19.613+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - seed demo entries"
+2026-10-13T19:13:19.630+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - create market tables"
+2026-10-13T19:13:19.652+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - add market stock version"
+2026-10-13T19:13:19.672+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 4 migrations to schema "public", now at version v4 (execution time 00:00.033s)
+2026-10-13T19:13:20.464+07:00  INFO 17136 --- [backend-app] [           main] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-10-13T19:13:20.464+07:00  INFO 17136 --- [backend-app] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-10-13T19:13:20.465+07:00  INFO 17136 --- [backend-app] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 1 ms
+2026-10-13T19:13:20.486+07:00  INFO 17136 --- [backend-app] [           main] c.a.backend.LabEntryIntegrationTest      : Started LabEntryIntegrationTest in 2.572 seconds (process running for 13.475)
+Java HotSpot(TM) 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+WARNING: A Java agent has been loaded dynamically (C:\Users\ThaiSon\.m2\repository\net\bytebuddy\byte-buddy-agent\1.14.19\byte-buddy-agent-1.14.19.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.766 s -- in com.aethercore.backend.LabEntryIntegrationTest
+[INFO] Running com.aethercore.backend.locking.PostgresDeadlockExperimentsTest
+2026-10-13T19:13:21.514+07:00  INFO 17136 --- [backend-app] [           main] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.aethercore.backend.locking.PostgresDeadlockExperimentsTest]: PostgresDeadlockExperimentsTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-10-13T19:13:21.618+07:00  INFO 17136 --- [backend-app] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.aethercore.backend.AetherCoreApplication for test class com.aethercore.backend.locking.PostgresDeadlockExperimentsTest
+2026-10-13T19:13:21.622+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Creating container for image: postgres:16-alpine
+2026-10-13T19:13:21.735+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine is starting: 58f5a38da53e50fb31803a0da81c75c73c0fddaec97454eb8871b667ccb71350
+2026-10-13T19:13:23.533+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine started in PT1.9115042S
+2026-10-13T19:13:23.533+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container is started (JDBC URL: jdbc:postgresql://localhost:52638/aethercore_deadlock_test?loggerLevel=OFF)
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.4)
+
+2026-10-13T19:13:23.560+07:00  INFO 17136 --- [backend-app] [           main] c.a.b.l.PostgresDeadlockExperimentsTest  : Starting PostgresDeadlockExperimentsTest using Java 22 with PID 17136 (started by ThaiSon in D:\Project CV\INTERVIEW\aethercore\backend-app)
+2026-10-13T19:13:23.560+07:00  INFO 17136 --- [backend-app] [           main] c.a.b.l.PostgresDeadlockExperimentsTest  : No active profile set, falling back to 1 default profile: "default"
+2026-10-13T19:13:24.319+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-2 - Starting...
+2026-10-13T19:13:24.344+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-2 - Added connection org.postgresql.jdbc.PgConnection@134c329a
+2026-10-13T19:13:24.345+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-2 - Start completed.
+2026-10-13T19:13:24.347+07:00  INFO 17136 --- [backend-app] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:52638/aethercore_deadlock_test (PostgreSQL 16.15)
+2026-10-13T19:13:24.365+07:00  INFO 17136 --- [backend-app] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-10-13T19:13:24.367+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 4 migrations (execution time 00:00.008s)
+2026-10-13T19:13:24.381+07:00  INFO 17136 --- [backend-app] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-10-13T19:13:24.418+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-10-13T19:13:24.423+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - create lab entry table"
+2026-10-13T19:13:24.446+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - seed demo entries"
+2026-10-13T19:13:24.465+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - create market tables"
+2026-10-13T19:13:24.490+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - add market stock version"
+2026-10-13T19:13:24.503+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 4 migrations to schema "public", now at version v4 (execution time 00:00.030s)
+2026-10-13T19:13:24.634+07:00  INFO 17136 --- [backend-app] [           main] c.a.b.l.PostgresDeadlockExperimentsTest  : Started PostgresDeadlockExperimentsTest in 1.097 seconds (process running for 17.624)
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.643 s -- in com.aethercore.backend.locking.PostgresDeadlockExperimentsTest
+[INFO] Running com.aethercore.backend.market.jpa.JpaVersionExperimentsTest
+2026-10-13T19:13:27.159+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Creating container for image: postgres:16-alpine
+2026-10-13T19:13:27.269+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine is starting: db132b071c11f977cb0f7d9ce67bd66c550f7548a7f03c987cfa2694d4f9614d
+2026-10-13T19:13:29.090+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine started in PT1.9317449S
+2026-10-13T19:13:29.091+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container is started (JDBC URL: jdbc:postgresql://localhost:52644/aethercore_jpa_test?loggerLevel=OFF)
+2026-10-13T19:13:29.120+07:00  INFO 17136 --- [backend-app] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:52644/aethercore_jpa_test (PostgreSQL 16.15)
+2026-10-13T19:13:29.135+07:00  INFO 17136 --- [backend-app] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-10-13T19:13:29.136+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 4 migrations (execution time 00:00.007s)
+2026-10-13T19:13:29.150+07:00  INFO 17136 --- [backend-app] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-10-13T19:13:29.181+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-10-13T19:13:29.185+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - create lab entry table"
+2026-10-13T19:13:29.207+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - seed demo entries"
+2026-10-13T19:13:29.223+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - create market tables"
+2026-10-13T19:13:29.245+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - add market stock version"
+2026-10-13T19:13:29.254+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 4 migrations to schema "public", now at version v4 (execution time 00:00.029s)
+2026-10-13T19:13:29.278+07:00  INFO 17136 --- [backend-app] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: aethercore-market-jpa-test]
+2026-10-13T19:13:29.281+07:00  INFO 17136 --- [backend-app] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-10-13T19:13:29.343+07:00  WARN 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001002: Using built-in connection pool (not intended for production use)
+2026-10-13T19:13:29.343+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Loaded JDBC driver class: org.postgresql.Driver
+2026-10-13T19:13:29.343+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001012: Connecting with JDBC URL [jdbc:postgresql://localhost:52644/aethercore_jpa_test?loggerLevel=OFF]
+2026-10-13T19:13:29.343+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001001: Connection properties: {password=****, user=test}
+2026-10-13T19:13:29.343+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001003: Autocommit mode: false
+2026-10-13T19:13:29.343+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001115: Connection pool size: 20 (min=1)
+2026-10-13T19:13:29.361+07:00  WARN 17136 --- [backend-app] [           main] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-10-13T19:13:29.422+07:00  INFO 17136 --- [backend-app] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-10-13T19:13:29.422+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.access     : HHH10001501: Connection obtained from JdbcConnectionAccess [org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator$ConnectionProviderJdbcConnectionAccess@3fd9c5db] for (non-JTA) DDL execution was not in auto-commit mode; the Connection 'local transaction' will be committed and the Connection will be set into auto-commit mode.
+2026-10-13T19:13:29.870+07:00  WARN 17136 --- [backend-app] [           main] o.h.engine.jdbc.spi.SqlExceptionHelper   : SQL Error: 0, SQLState: 23505
+2026-10-13T19:13:29.870+07:00 ERROR 17136 --- [backend-app] [           main] o.h.engine.jdbc.spi.SqlExceptionHelper   : ERROR: duplicate key value violates unique constraint "market_purchase_pkey"
+  Detail: Key (id)=(eff8e0d6-74e3-46b1-b030-04bff49aa029) already exists.
+2026-10-13T19:13:30.199+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001008: Cleaning up connection pool [jdbc:postgresql://localhost:52644/aethercore_jpa_test?loggerLevel=OFF]
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.456 s -- in com.aethercore.backend.market.jpa.JpaVersionExperimentsTest
+[INFO] Running com.aethercore.backend.market.MarketLockingConcurrencyTest
+2026-10-13T19:13:30.618+07:00  INFO 17136 --- [backend-app] [           main] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.aethercore.backend.market.MarketLockingConcurrencyTest]: MarketLockingConcurrencyTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-10-13T19:13:30.648+07:00  INFO 17136 --- [backend-app] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.aethercore.backend.AetherCoreApplication for test class com.aethercore.backend.market.MarketLockingConcurrencyTest
+2026-10-13T19:13:30.661+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Creating container for image: postgres:16-alpine
+2026-10-13T19:13:30.804+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine is starting: c9ea9c20638510ffcfb0ee7c2ac2031f23a6d85e7f3ca27d11271cba8f463b92
+2026-10-13T19:13:32.741+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine started in PT2.0791018S
+2026-10-13T19:13:32.741+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container is started (JDBC URL: jdbc:postgresql://localhost:53872/aethercore_market_test?loggerLevel=OFF)
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.4)
+
+2026-10-13T19:13:32.764+07:00  INFO 17136 --- [backend-app] [           main] c.a.b.m.MarketLockingConcurrencyTest     : Starting MarketLockingConcurrencyTest using Java 22 with PID 17136 (started by ThaiSon in D:\Project CV\INTERVIEW\aethercore\backend-app)
+2026-10-13T19:13:32.764+07:00  INFO 17136 --- [backend-app] [           main] c.a.b.m.MarketLockingConcurrencyTest     : No active profile set, falling back to 1 default profile: "default"
+2026-10-13T19:13:32.963+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-3 - Starting...
+2026-10-13T19:13:32.991+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-3 - Added connection org.postgresql.jdbc.PgConnection@73e9d4d0
+2026-10-13T19:13:32.992+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-3 - Start completed.
+2026-10-13T19:13:32.995+07:00  INFO 17136 --- [backend-app] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:53872/aethercore_market_test (PostgreSQL 16.15)
+2026-10-13T19:13:33.016+07:00  INFO 17136 --- [backend-app] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-10-13T19:13:33.017+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 4 migrations (execution time 00:00.009s)
+2026-10-13T19:13:33.032+07:00  INFO 17136 --- [backend-app] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-10-13T19:13:33.070+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-10-13T19:13:33.076+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - create lab entry table"
+2026-10-13T19:13:33.095+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - seed demo entries"
+2026-10-13T19:13:33.114+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - create market tables"
+2026-10-13T19:13:33.138+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - add market stock version"
+2026-10-13T19:13:33.152+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 4 migrations to schema "public", now at version v4 (execution time 00:00.031s)
+2026-10-13T19:13:33.302+07:00  INFO 17136 --- [backend-app] [           main] c.a.b.m.MarketLockingConcurrencyTest     : Started MarketLockingConcurrencyTest in 0.558 seconds (process running for 26.291)
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.337 s -- in com.aethercore.backend.market.MarketLockingConcurrencyTest
+[INFO] Running com.aethercore.backend.market.MarketPurchaseConcurrencyTest
+2026-10-13T19:13:33.957+07:00  INFO 17136 --- [backend-app] [           main] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.aethercore.backend.market.MarketPurchaseConcurrencyTest]: MarketPurchaseConcurrencyTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-10-13T19:13:33.959+07:00  INFO 17136 --- [backend-app] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.aethercore.backend.AetherCoreApplication for test class com.aethercore.backend.market.MarketPurchaseConcurrencyTest
+2026-10-13T19:13:33.966+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Creating container for image: postgres:16-alpine
+2026-10-13T19:13:34.110+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine is starting: 906585430f36af6ccaa9dee82ab59934b2b6baf9b3b93cefc9bb6818e5169974
+2026-10-13T19:13:35.861+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine started in PT1.8944845S
+2026-10-13T19:13:35.861+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container is started (JDBC URL: jdbc:postgresql://localhost:53879/aethercore_market_test?loggerLevel=OFF)
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.4)
+
+2026-10-13T19:13:35.884+07:00  INFO 17136 --- [backend-app] [           main] c.a.b.m.MarketPurchaseConcurrencyTest    : Starting MarketPurchaseConcurrencyTest using Java 22 with PID 17136 (started by ThaiSon in D:\Project CV\INTERVIEW\aethercore\backend-app)
+2026-10-13T19:13:35.884+07:00  INFO 17136 --- [backend-app] [           main] c.a.b.m.MarketPurchaseConcurrencyTest    : No active profile set, falling back to 1 default profile: "default"
+2026-10-13T19:13:36.126+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-4 - Starting...
+2026-10-13T19:13:36.151+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-4 - Added connection org.postgresql.jdbc.PgConnection@23ed406
+2026-10-13T19:13:36.152+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-4 - Start completed.
+2026-10-13T19:13:36.155+07:00  INFO 17136 --- [backend-app] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:53879/aethercore_market_test (PostgreSQL 16.15)
+2026-10-13T19:13:36.172+07:00  INFO 17136 --- [backend-app] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-10-13T19:13:36.174+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 4 migrations (execution time 00:00.007s)
+2026-10-13T19:13:36.187+07:00  INFO 17136 --- [backend-app] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-10-13T19:13:36.225+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-10-13T19:13:36.230+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - create lab entry table"
+2026-10-13T19:13:36.253+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - seed demo entries"
+2026-10-13T19:13:36.274+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - create market tables"
+2026-10-13T19:13:36.299+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - add market stock version"
+2026-10-13T19:13:36.314+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 4 migrations to schema "public", now at version v4 (execution time 00:00.034s)
+2026-10-13T19:13:36.483+07:00  INFO 17136 --- [backend-app] [           main] c.a.b.m.MarketPurchaseConcurrencyTest    : Started MarketPurchaseConcurrencyTest in 0.618 seconds (process running for 29.472)
+[INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.026 s -- in com.aethercore.backend.market.MarketPurchaseConcurrencyTest
+[INFO] Running com.aethercore.backend.pagination.JpaCollectionPaginationExperimentsTest
+2026-10-13T19:13:36.984+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Creating container for image: postgres:16-alpine
+2026-10-13T19:13:37.098+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine is starting: b94c65e7bf325ccc78e509232ac1fcbadf4c5dd7956a47c344321f4bc43c1281
+2026-10-13T19:13:38.812+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine started in PT1.8275403S
+2026-10-13T19:13:38.812+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container is started (JDBC URL: jdbc:postgresql://localhost:53889/aethercore_pagination_test?loggerLevel=OFF)
+2026-10-13T19:13:38.853+07:00  INFO 17136 --- [backend-app] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: aethercore-pagination-jpa-test]
+2026-10-13T19:13:38.856+07:00  INFO 17136 --- [backend-app] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-10-13T19:13:38.897+07:00  WARN 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001002: Using built-in connection pool (not intended for production use)
+2026-10-13T19:13:38.897+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Loaded JDBC driver class: org.postgresql.Driver
+2026-10-13T19:13:38.897+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001012: Connecting with JDBC URL [jdbc:postgresql://localhost:53889/aethercore_pagination_test?loggerLevel=OFF]
+2026-10-13T19:13:38.897+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001001: Connection properties: {password=****, user=test}
+2026-10-13T19:13:38.898+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001003: Autocommit mode: false
+2026-10-13T19:13:38.898+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001115: Connection pool size: 20 (min=1)
+2026-10-13T19:13:38.917+07:00  WARN 17136 --- [backend-app] [           main] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-10-13T19:13:38.976+07:00  INFO 17136 --- [backend-app] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-10-13T19:13:38.977+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.access     : HHH10001501: Connection obtained from JdbcConnectionAccess [org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator$ConnectionProviderJdbcConnectionAccess@7cd90b9b] for (non-JTA) DDL execution was not in auto-commit mode; the Connection 'local transaction' will be committed and the Connection will be set into auto-commit mode.
+2026-10-13T19:13:39.008+07:00  INFO 17136 --- [backend-app] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: aethercore-pagination-jpa-test]
+2026-10-13T19:13:39.010+07:00  INFO 17136 --- [backend-app] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-10-13T19:13:39.039+07:00  WARN 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001002: Using built-in connection pool (not intended for production use)
+2026-10-13T19:13:39.039+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001005: Loaded JDBC driver class: org.postgresql.Driver
+2026-10-13T19:13:39.039+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001012: Connecting with JDBC URL [jdbc:postgresql://localhost:53889/aethercore_pagination_test?loggerLevel=OFF]
+2026-10-13T19:13:39.040+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001001: Connection properties: {password=****, user=test}
+2026-10-13T19:13:39.040+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001003: Autocommit mode: false
+2026-10-13T19:13:39.040+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001115: Connection pool size: 20 (min=1)
+2026-10-13T19:13:39.054+07:00  WARN 17136 --- [backend-app] [           main] org.hibernate.orm.deprecation            : HHH90000025: PostgreSQLDialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-10-13T19:13:39.097+07:00  INFO 17136 --- [backend-app] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-10-13T19:13:39.098+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.access     : HHH10001501: Connection obtained from JdbcConnectionAccess [org.hibernate.engine.jdbc.env.internal.JdbcEnvironmentInitiator$ConnectionProviderJdbcConnectionAccess@2bb03bbd] for (non-JTA) DDL execution was not in auto-commit mode; the Connection 'local transaction' will be committed and the Connection will be set into auto-commit mode.
+2026-10-13T19:13:39.145+07:00  WARN 17136 --- [backend-app] [           main] org.hibernate.orm.query                  : HHH90003004: firstResult/maxResults specified with collection fetch; applying in memory
+2026-10-13T19:13:39.162+07:00  INFO 17136 --- [backend-app] [           main] i.StatisticalLoggingSessionEventListener : Session Metrics {
+    16500 nanoseconds spent acquiring 1 JDBC connections;
+    19100 nanoseconds spent releasing 1 JDBC connections;
+    63700 nanoseconds spent preparing 1 JDBC statements;
+    3121100 nanoseconds spent executing 1 JDBC statements;
+    0 nanoseconds spent executing 0 JDBC batches;
+    0 nanoseconds spent performing 0 L2C puts;
+    0 nanoseconds spent performing 0 L2C hits;
+    0 nanoseconds spent performing 0 L2C misses;
+    468700 nanoseconds spent executing 1 flushes (flushing a total of 15 entities and 5 collections);
+    24774133615601 nanoseconds spent executing 1 pre-partial-flushes;
+    5400 nanoseconds spent executing 1 partial-flushes (flushing a total of 0 entities and 0 collections)
+}
+2026-10-13T19:13:39.187+07:00  INFO 17136 --- [backend-app] [           main] i.StatisticalLoggingSessionEventListener : Session Metrics {
+    0 nanoseconds spent acquiring 0 JDBC connections;
+    0 nanoseconds spent releasing 0 JDBC connections;
+    0 nanoseconds spent preparing 0 JDBC statements;
+    0 nanoseconds spent executing 0 JDBC statements;
+    0 nanoseconds spent executing 0 JDBC batches;
+    0 nanoseconds spent performing 0 L2C puts;
+    0 nanoseconds spent performing 0 L2C hits;
+    0 nanoseconds spent performing 0 L2C misses;
+    0 nanoseconds spent executing 0 flushes (flushing a total of 0 entities and 0 collections);
+    0 nanoseconds spent executing 0 pre-partial-flushes;
+    0 nanoseconds spent executing 0 partial-flushes (flushing a total of 0 entities and 0 collections)
+}
+2026-10-13T19:13:39.264+07:00  INFO 17136 --- [backend-app] [           main] i.StatisticalLoggingSessionEventListener : Session Metrics {
+    13800 nanoseconds spent acquiring 1 JDBC connections;
+    17900 nanoseconds spent releasing 1 JDBC connections;
+    171400 nanoseconds spent preparing 2 JDBC statements;
+    4839400 nanoseconds spent executing 2 JDBC statements;
+    0 nanoseconds spent executing 0 JDBC batches;
+    0 nanoseconds spent performing 0 L2C puts;
+    0 nanoseconds spent performing 0 L2C hits;
+    0 nanoseconds spent performing 0 L2C misses;
+    275100 nanoseconds spent executing 1 flushes (flushing a total of 5 entities and 2 collections);
+    49548436361102 nanoseconds spent executing 2 pre-partial-flushes;
+    13800 nanoseconds spent executing 2 partial-flushes (flushing a total of 0 entities and 0 collections)
+}
+2026-10-13T19:13:39.298+07:00  INFO 17136 --- [backend-app] [           main] i.StatisticalLoggingSessionEventListener : Session Metrics {
+    14900 nanoseconds spent acquiring 1 JDBC connections;
+    13600 nanoseconds spent releasing 1 JDBC connections;
+    59600 nanoseconds spent preparing 2 JDBC statements;
+    2025000 nanoseconds spent executing 2 JDBC statements;
+    0 nanoseconds spent executing 0 JDBC batches;
+    0 nanoseconds spent performing 0 L2C puts;
+    0 nanoseconds spent performing 0 L2C hits;
+    0 nanoseconds spent performing 0 L2C misses;
+    211300 nanoseconds spent executing 1 flushes (flushing a total of 5 entities and 2 collections);
+    49548559460702 nanoseconds spent executing 2 pre-partial-flushes;
+    11400 nanoseconds spent executing 2 partial-flushes (flushing a total of 0 entities and 0 collections)
+}
+2026-10-13T19:13:39.324+07:00  INFO 17136 --- [backend-app] [           main] i.StatisticalLoggingSessionEventListener : Session Metrics {
+    9900 nanoseconds spent acquiring 1 JDBC connections;
+    14500 nanoseconds spent releasing 1 JDBC connections;
+    24600 nanoseconds spent preparing 1 JDBC statements;
+    712400 nanoseconds spent executing 1 JDBC statements;
+    0 nanoseconds spent executing 0 JDBC batches;
+    0 nanoseconds spent performing 0 L2C puts;
+    0 nanoseconds spent performing 0 L2C hits;
+    0 nanoseconds spent performing 0 L2C misses;
+    0 nanoseconds spent executing 0 flushes (flushing a total of 0 entities and 0 collections);
+    24774309167601 nanoseconds spent executing 1 pre-partial-flushes;
+    1900 nanoseconds spent executing 1 partial-flushes (flushing a total of 0 entities and 0 collections)
+}
+2026-10-13T19:13:39.333+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001008: Cleaning up connection pool [jdbc:postgresql://localhost:53889/aethercore_pagination_test?loggerLevel=OFF]
+2026-10-13T19:13:39.334+07:00  INFO 17136 --- [backend-app] [           main] org.hibernate.orm.connections.pooling    : HHH10001008: Cleaning up connection pool [jdbc:postgresql://localhost:53889/aethercore_pagination_test?loggerLevel=OFF]
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.727 s -- in com.aethercore.backend.pagination.JpaCollectionPaginationExperimentsTest
+[INFO] Running com.aethercore.backend.queryplan.PostgresKeysetPaginationExperimentsTest
+2026-10-13T19:13:39.713+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Creating container for image: postgres:16-alpine
+2026-10-13T19:13:39.833+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine is starting: 07acfcfd4008b63f6d46781e46dd1bff660afaed680e5e328abbd8b56208be35
+2026-10-13T19:13:41.689+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine started in PT1.9756633S
+2026-10-13T19:13:41.689+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container is started (JDBC URL: jdbc:postgresql://localhost:56797/aethercore_keyset_test?loggerLevel=OFF)
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.263 s -- in com.aethercore.backend.queryplan.PostgresKeysetPaginationExperimentsTest
+[INFO] Running com.aethercore.backend.queryplan.PostgresQueryPlanExperimentsTest
+2026-10-13T19:13:42.980+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Creating container for image: postgres:16-alpine
+2026-10-13T19:13:43.085+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine is starting: a165261a5b70849ae6758fc0e97fe5c2bff5974901c7f04bd379ce09d3279605
+2026-10-13T19:13:44.868+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine started in PT1.8873615S
+2026-10-13T19:13:44.868+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container is started (JDBC URL: jdbc:postgresql://localhost:56806/aethercore_queryplan_test?loggerLevel=OFF)
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.880 s -- in com.aethercore.backend.queryplan.PostgresQueryPlanExperimentsTest
+[INFO] Running com.aethercore.backend.transaction.TransactionPropagationExperimentsTest
+2026-10-13T19:13:46.894+07:00  INFO 17136 --- [backend-app] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.aethercore.backend.AetherCoreApplication for test class com.aethercore.backend.transaction.TransactionPropagationExperimentsTest
+2026-10-13T19:13:46.899+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Creating container for image: postgres:16-alpine
+2026-10-13T19:13:47.010+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine is starting: 88eafd74481e9028dbd5541adbe7402e58b0b4087a1740f6e02b3b97d2ee2d24
+2026-10-13T19:13:48.799+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine started in PT1.9002174S
+2026-10-13T19:13:48.800+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container is started (JDBC URL: jdbc:postgresql://localhost:54051/aethercore_tx_prop_test?loggerLevel=OFF)
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.4)
+
+2026-10-13T19:13:48.822+07:00  INFO 17136 --- [backend-app] [           main] .t.TransactionPropagationExperimentsTest : Starting TransactionPropagationExperimentsTest using Java 22 with PID 17136 (started by ThaiSon in D:\Project CV\INTERVIEW\aethercore\backend-app)
+2026-10-13T19:13:48.823+07:00  INFO 17136 --- [backend-app] [           main] .t.TransactionPropagationExperimentsTest : No active profile set, falling back to 1 default profile: "default"
+2026-10-13T19:13:49.059+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-5 - Starting...
+2026-10-13T19:13:49.088+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-5 - Added connection org.postgresql.jdbc.PgConnection@3c6ed296
+2026-10-13T19:13:49.088+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-5 - Start completed.
+2026-10-13T19:13:49.091+07:00  INFO 17136 --- [backend-app] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:54051/aethercore_tx_prop_test (PostgreSQL 16.15)
+2026-10-13T19:13:49.117+07:00  INFO 17136 --- [backend-app] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-10-13T19:13:49.119+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 4 migrations (execution time 00:00.015s)
+2026-10-13T19:13:49.141+07:00  INFO 17136 --- [backend-app] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-10-13T19:13:49.207+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-10-13T19:13:49.212+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - create lab entry table"
+2026-10-13T19:13:49.231+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - seed demo entries"
+2026-10-13T19:13:49.247+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - create market tables"
+2026-10-13T19:13:49.267+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - add market stock version"
+2026-10-13T19:13:49.277+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 4 migrations to schema "public", now at version v4 (execution time 00:00.028s)
+2026-10-13T19:13:49.396+07:00  INFO 17136 --- [backend-app] [           main] .t.TransactionPropagationExperimentsTest : Started TransactionPropagationExperimentsTest in 0.594 seconds (process running for 42.385)
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.029 s -- in com.aethercore.backend.transaction.TransactionPropagationExperimentsTest
+[INFO] Running com.aethercore.backend.transaction.TransactionProxyExperimentsTest
+2026-10-13T19:13:49.899+07:00  INFO 17136 --- [backend-app] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.aethercore.backend.AetherCoreApplication for test class com.aethercore.backend.transaction.TransactionProxyExperimentsTest
+2026-10-13T19:13:49.905+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Creating container for image: postgres:16-alpine
+2026-10-13T19:13:50.009+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine is starting: 0187ac86f42ed346328e99e5bced3cf7d72d218eea6957beaaefd2ceb7f2e66e
+2026-10-13T19:13:51.811+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container postgres:16-alpine started in PT1.9066231S
+2026-10-13T19:13:51.811+07:00  INFO 17136 --- [backend-app] [           main] tc.postgres:16-alpine                    : Container is started (JDBC URL: jdbc:postgresql://localhost:54057/aethercore_tx_proxy_test?loggerLevel=OFF)
+
+  .   ____          _            __ _ _
+ /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
+( ( )\___ | '_ | '_| | '_ \/ _` | \ \ \ \
+ \\/  ___)| |_)| | | | | || (_| |  ) ) ) )
+  '  |____| .__|_| |_|_| |_\__, | / / / /
+ =========|_|==============|___/=/_/_/_/
+
+ :: Spring Boot ::                (v3.3.4)
+
+2026-10-13T19:13:51.830+07:00  INFO 17136 --- [backend-app] [           main] c.a.b.t.TransactionProxyExperimentsTest  : Starting TransactionProxyExperimentsTest using Java 22 with PID 17136 (started by ThaiSon in D:\Project CV\INTERVIEW\aethercore\backend-app)
+2026-10-13T19:13:51.831+07:00  INFO 17136 --- [backend-app] [           main] c.a.b.t.TransactionProxyExperimentsTest  : No active profile set, falling back to 1 default profile: "default"
+2026-10-13T19:13:52.004+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-6 - Starting...
+2026-10-13T19:13:52.031+07:00  INFO 17136 --- [backend-app] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-6 - Start completed.
+2026-10-13T19:13:52.047+07:00  INFO 17136 --- [backend-app] [           main] org.flywaydb.core.FlywayExecutor         : Database: jdbc:postgresql://localhost:54057/aethercore_tx_proxy_test (PostgreSQL 16.15)
+2026-10-13T19:13:52.065+07:00  INFO 17136 --- [backend-app] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Schema history table "public"."flyway_schema_history" does not exist yet
+2026-10-13T19:13:52.066+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbValidate     : Successfully validated 4 migrations (execution time 00:00.008s)
+2026-10-13T19:13:52.081+07:00  INFO 17136 --- [backend-app] [           main] o.f.c.i.s.JdbcTableSchemaHistory         : Creating Schema History table "public"."flyway_schema_history" ...
+2026-10-13T19:13:52.117+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Current version of schema "public": << Empty Schema >>
+2026-10-13T19:13:52.122+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "1 - create lab entry table"
+2026-10-13T19:13:52.141+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "2 - seed demo entries"
+2026-10-13T19:13:52.159+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "3 - create market tables"
+2026-10-13T19:13:52.182+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Migrating schema "public" to version "4 - add market stock version"
+2026-10-13T19:13:52.193+07:00  INFO 17136 --- [backend-app] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 4 migrations to schema "public", now at version v4 (execution time 00:00.030s)
+2026-10-13T19:13:52.315+07:00  INFO 17136 --- [backend-app] [           main] c.a.b.t.TransactionProxyExperimentsTest  : Started TransactionProxyExperimentsTest in 0.501 seconds (process running for 45.304)
+[INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.935 s -- in com.aethercore.backend.transaction.TransactionProxyExperimentsTest
+[INFO]
+[INFO] Results:
+[INFO]
+[INFO] Tests run: 67, Failures: 0, Errors: 0, Skipped: 0
+[INFO]
+[INFO] ------------------------------------------------------------------------
+[INFO] Reactor Summary for AetherCore Parent 0.0.1-SNAPSHOT:
+[INFO]
+[INFO] AetherCore Parent .................................. SUCCESS [  0.216 s]
+[INFO] AetherCore :: Core Lab ............................. SUCCESS [  3.612 s]
+[INFO] AetherCore :: Backend App .......................... SUCCESS [ 49.826 s]
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  54.070 s
+[INFO] Finished at: 2026-10-13T19:13:53+07:00
+[INFO] ------------------------------------------------------------------------

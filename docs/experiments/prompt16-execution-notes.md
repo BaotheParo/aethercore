@@ -24,6 +24,13 @@ Nhằm đảm bảo tính trung thực và chuẩn xác học thuật, các nh�
 5. **Ngưỡng tham số SQL (Parameter Limits):**
    Không được lấy con số giả định `pageSize = 1000` làm ngưỡng vượt giới hạn tham số chung cho mọi RDBMS. Mỗi hệ quản trị cơ sở dữ liệu có giới hạn riêng (ví dụ PostgreSQL giới hạn 65.535 tham số bind, SQL Server giới hạn 2.100 tham số, SQLite giới hạn 999 hoặc 32.766 tùy phiên bản).
 6. **Không quy kết tốc độ phân trang khi chưa có Execution Plan:**
+7. **Hiệu chỉnh chi tiết kỹ thuật cho M2-E5A (đối chiếu Prompt 17):**
+   - Thuật toán Sort quan sát thực tế trong raw plan của EP1 và EP2 là `quicksort` (`Sort Method: quicksort`), không tự quy kết là `top-N heapsort`.
+   - `Shared Hit Blocks` là số lần tìm thấy block trong buffer cache của database, không phải số lần đọc đĩa vật lý hay số trang vật lý duy nhất.
+   - `Shared Read Blocks` cũng không phản ánh trực tiếp I/O thiết bị phần cứng do ảnh hưởng của OS Page Cache.
+   - `Plan Width` là ước lượng kích thước output của node trong bộ nhớ, không phải kích thước hàng trên đĩa vật lý.
+   - Lựa chọn `Seq Scan` ở EP4 là quyết định dựa trên thống kê và cost model tại cấu hình cụ thể; không tuyên bố "nhanh hơn nhiều lần" đối với phương án chưa chạy thực nghiệm.
+
    Trong Prompt 15, chưa có phép đo nào về `EXPLAIN ANALYZE` trên câu lệnh phân trang hai bước. Do đó, không được tuyên bố rằng *"index đã giúp phân trang nhanh hơn X%"* trước khi có số liệu thực nghiệm từ Prompt 16.
 
 ---

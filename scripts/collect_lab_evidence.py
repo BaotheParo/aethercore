@@ -138,7 +138,8 @@ class EvidenceCollector:
                 'deadlock-observations.json': [f"DL{i}" for i in range(1, 4)],
                 'fetch-observations.json': [f"NQ{i}" for i in range(1, 6)],
                 'pagination-observations.json': [f"PG{i}" for i in range(1, 6)],
-                'query-plan-observations.json': [f"EP{i}" for i in range(1, 5)]
+                'query-plan-observations.json': [f"EP{i}" for i in range(1, 5)],
+                'keyset-pagination-observations.json': [f"KP{i}" for i in range(1, 5)]
             }
 
         validated = []
@@ -180,6 +181,9 @@ class EvidenceCollector:
                 # Special validation for query plan observations (Prompt 16)
                 elif filename == 'query-plan-observations.json':
                     self._validate_query_plan_scenario(case_id, s)
+                # Special validation for keyset pagination observations (Prompt 17)
+                elif filename == 'keyset-pagination-observations.json':
+                    self._validate_keyset_scenario(case_id, s)
 
             for exp in expected_cases:
                 if exp not in found_cases:
@@ -303,6 +307,77 @@ class EvidenceCollector:
         if not isinstance(node_summaries, list) or len(node_summaries) == 0:
             raise ValidationError(f"Scenario {case_id} nodeSummaries must be a non-empty list")
 
+    def _validate_keyset_scenario(self, case_id, s):
+        for req_field in ["caseId", "pageSize", "assertionsPassed"]:
+            if req_field not in s:
+                raise ValidationError(f"Scenario {case_id} missing required field '{req_field}' in keyset-pagination-observations.json")
+
+        if s.get("assertionsPassed") is not True:
+            raise ValidationError(f"Scenario {case_id} assertionsPassed must be True")
+
+        if case_id == "KP1":
+            if s.get("deepPagesEqual") is not True:
+                raise ValidationError(f"Scenario KP1 deepPagesEqual must be True")
+
+            measurements = s.get("measurements")
+            if not isinstance(measurements, dict):
+                raise ValidationError("Scenario KP1 measurements must be a dict")
+
+            for m_key in ["first_page", "deep_offset", "deep_keyset"]:
+                if m_key not in measurements:
+                    raise ValidationError(f"Scenario KP1 missing measurement '{m_key}'")
+                m = measurements[m_key]
+                if not isinstance(m.get("returnedIds"), list) or len(m.get("returnedIds")) != 20:
+                    raise ValidationError(f"Scenario KP1 measurement '{m_key}' must have 20 returnedIds")
+
+                raw_plan = m.get("rawExplainAnalyzeJson")
+                if not raw_plan:
+                    raise ValidationError(f"Scenario KP1 measurement '{m_key}' missing rawExplainAnalyzeJson")
+
+                plan_obj = None
+                if isinstance(raw_plan, list) and len(raw_plan) > 0 and isinstance(raw_plan[0], dict):
+                    plan_obj = raw_plan[0].get("Plan")
+                elif isinstance(raw_plan, dict):
+                    plan_obj = raw_plan.get("Plan")
+
+                if not isinstance(plan_obj, dict) or "Node Type" not in plan_obj:
+                    raise ValidationError(f"Scenario KP1 measurement '{m_key}' rawExplainAnalyzeJson must contain Plan with 'Node Type'")
+
+                if "Actual Rows" not in plan_obj and "Actual Loops" not in plan_obj:
+                    raise ValidationError(f"Scenario KP1 measurement '{m_key}' rawExplainAnalyzeJson must contain actual execution metrics")
+
+            ret_ids = s.get("returnedIds", {})
+            deep_offset_ids = ret_ids.get("deepOffset")
+            deep_keyset_ids = ret_ids.get("deepKeyset")
+            if not deep_offset_ids or not deep_keyset_ids or deep_offset_ids != deep_keyset_ids:
+                raise ValidationError("Scenario KP1 deepOffset IDs and deepKeyset IDs must be non-empty and strictly equal")
+
+            hyp_status = s.get("hypothesisStatus")
+            if hyp_status not in ["MATCHED", "DIFFERENT"]:
+                raise ValidationError(f"Scenario KP1 hypothesisStatus must be MATCHED or DIFFERENT, got '{hyp_status}'")
+
+        elif case_id == "KP2":
+            for field in ["page1Ids", "brokenPage2Ids", "correctPage2Ids", "fullTraversalIds", "fullTraversalPageSizes"]:
+                if field not in s or not isinstance(s[field], list):
+                    raise ValidationError(f"Scenario KP2 missing or invalid list field '{field}'")
+            if len(s["page1Ids"]) != 7 or len(s["brokenPage2Ids"]) != 7 or len(s["correctPage2Ids"]) != 7 or len(s["fullTraversalIds"]) != 24:
+                raise ValidationError("Scenario KP2 unexpected list lengths for page1, broken, correct, or fullTraversal")
+
+        elif case_id == "KP3":
+            for field in ["page1Ids", "offsetPage2Ids", "keysetPage2Ids", "offsetDuplicateId"]:
+                if field not in s:
+                    raise ValidationError(f"Scenario KP3 missing required field '{field}'")
+            if s.get("keysetHasDuplicate") is not False:
+                raise ValidationError("Scenario KP3 keysetHasDuplicate must be False")
+
+        elif case_id == "KP4":
+            for field in ["page1Ids", "offsetPage2Ids", "keysetPage2Ids", "offsetSkippedId"]:
+                if field not in s:
+                    raise ValidationError(f"Scenario KP4 missing required field '{field}'")
+            if s.get("keysetHasSkipped") is not False:
+                raise ValidationError("Scenario KP4 keysetHasSkipped must be False")
+
+
     def generate_summary_text(self, core_res, backend_res, meta):
         total_core = core_res['total_tests']
         core_failures = core_res['total_failures']
@@ -368,7 +443,7 @@ Total Tests Run: {total_core} | Failures: {core_failures} | Errors: {core_errors
 
         summary += f"""
 ================================================================================
-MODULE 2: backend-app (Spring Boot, Concurrency, JDBC, JPA, Propagation, Locking, Fetch, Pagination, Query Plan)
+MODULE 2: backend-app (Spring Boot, Concurrency, JDBC, JPA, Propagation, Locking, Fetch, Pagination, Query Plan, Keyset Pagination)
 Total Test Classes: {len(backend_res['classes'])}
 Total Tests Run: {total_backend} | Failures: {backend_failures} | Errors: {backend_errors} | Skipped: {backend_skipped}
 --------------------------------------------------------------------------------

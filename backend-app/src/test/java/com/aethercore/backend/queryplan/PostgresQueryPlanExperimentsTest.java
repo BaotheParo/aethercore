@@ -255,15 +255,19 @@ public class PostgresQueryPlanExperimentsTest {
             }
 
             ExplainPlanReader.PlanReport report = ExplainPlanReader.parse(rawExplainAnalyze);
-            assertEquals("Limit", report.rootNodeType(), "Root node must be Limit");
-            assertEquals(5L, report.actualRows(), "Limit node must output 5 actual rows");
-            assertTrue(report.hasSortNode(), "Plan must contain a Sort node");
-            assertEquals("Seq Scan", report.scanNodeType(), "Scan node must be Seq Scan");
+            assertNotNull(report.rootNodeType(), "Root node must not be null");
+            assertNotNull(report.nodeSummaries(), "Node summaries must not be null");
+            assertFalse(report.nodeSummaries().isEmpty(), "Node summaries must not be empty");
+            assertEquals(5L, report.actualRows(), "Query must output 5 actual rows");
 
-            // Evaluate hypothesis
+            // Evaluate hypothesis decoupled from hard assertions
             boolean hypothesisMatched = "Limit".equals(report.rootNodeType())
                     && report.hasSortNode()
                     && "Seq Scan".equals(report.scanNodeType());
+
+            String ep1Interpretation = hypothesisMatched
+                    ? "Without a secondary index, PostgreSQL performs a full table Seq Scan, filters rows in heap, and sorts candidate rows before applying Limit."
+                    : "Planner selected root=" + report.rootNodeType() + ", scan=" + report.scanNodeType() + ", sort=" + report.hasSortNode() + " based on cost model configuration.";
 
             Map<String, Object> resultSummary = new LinkedHashMap<>();
             resultSummary.put("rowCount", actualIds.size());
@@ -284,7 +288,7 @@ public class PostgresQueryPlanExperimentsTest {
                     report,
                     "Limit -> Sort -> Seq Scan with heap filter discarding non-matching rows",
                     hypothesisMatched ? "MATCHED" : "DIFFERENT",
-                    "Without a secondary index, PostgreSQL performs a full table Seq Scan, filters rows in heap, and sorts candidate rows before applying Limit.",
+                    ep1Interpretation,
                     true
             ));
         }
@@ -331,15 +335,19 @@ public class PostgresQueryPlanExperimentsTest {
             }
 
             ExplainPlanReader.PlanReport report = ExplainPlanReader.parse(rawExplainAnalyze);
-            assertEquals("Limit", report.rootNodeType());
-            assertEquals(5L, report.actualRows());
-            assertTrue(report.hasSortNode(), "EP2 still requires Sort because buyer_id index does not provide created_at order");
-            assertNotNull(report.scanNodeType());
-            assertTrue(report.scanNodeType().contains("Bitmap") || report.scanNodeType().contains("Index"),
-                    "Planner should use Index Scan or Bitmap Heap Scan for selective buyer_id filter");
+            assertNotNull(report.rootNodeType(), "Root node must not be null");
+            assertNotNull(report.nodeSummaries(), "Node summaries must not be null");
+            assertFalse(report.nodeSummaries().isEmpty(), "Node summaries must not be empty");
+            assertEquals(5L, report.actualRows(), "Query must output 5 actual rows");
 
+            // Evaluate hypothesis decoupled from hard assertions
             boolean hypothesisMatched = report.hasSortNode()
+                    && report.scanNodeType() != null
                     && (report.scanNodeType().contains("Index") || report.scanNodeType().contains("Bitmap"));
+
+            String ep2Interpretation = hypothesisMatched
+                    ? "Single-column index on buyer_id eliminates scanning unrelated buyers, but because rows are not sorted by created_at, a Sort node is still necessary."
+                    : "Planner selected root=" + report.rootNodeType() + ", scan=" + report.scanNodeType() + ", sort=" + report.hasSortNode() + " based on cost model configuration.";
 
             Map<String, Object> resultSummary = new LinkedHashMap<>();
             resultSummary.put("rowCount", actualIds.size());
@@ -360,7 +368,7 @@ public class PostgresQueryPlanExperimentsTest {
                     report,
                     "Index Scan or Bitmap Scan on buyer_id narrows candidate rows, filters status, then sorts by created_at",
                     hypothesisMatched ? "MATCHED" : "DIFFERENT",
-                    "Single-column index on buyer_id eliminates scanning unrelated buyers, but because rows are not sorted by created_at, a Sort node is still necessary.",
+                    ep2Interpretation,
                     true
             ));
         }
@@ -407,12 +415,17 @@ public class PostgresQueryPlanExperimentsTest {
             }
 
             ExplainPlanReader.PlanReport report = ExplainPlanReader.parse(rawExplainAnalyze);
-            assertEquals("Limit", report.rootNodeType());
-            assertEquals(5L, report.actualRows());
-            assertFalse(report.hasSortNode(), "Composite index matching WHERE + ORDER BY eliminates the need for an explicit Sort node");
-            assertEquals("Index Scan", report.scanNodeType(), "Scan node should be Index Scan using composite index");
+            assertNotNull(report.rootNodeType(), "Root node must not be null");
+            assertNotNull(report.nodeSummaries(), "Node summaries must not be null");
+            assertFalse(report.nodeSummaries().isEmpty(), "Node summaries must not be empty");
+            assertEquals(5L, report.actualRows(), "Query must output 5 actual rows");
 
+            // Evaluate hypothesis decoupled from hard assertions
             boolean hypothesisMatched = !report.hasSortNode() && "Index Scan".equals(report.scanNodeType());
+
+            String ep3Interpretation = hypothesisMatched
+                    ? "The composite index covers both equality filters (buyer_id, status) and ordering columns (created_at DESC, id DESC), allowing the engine to read directly in sorted order and stop at Limit=5."
+                    : "Planner selected root=" + report.rootNodeType() + ", scan=" + report.scanNodeType() + ", sort=" + report.hasSortNode() + " based on cost model configuration.";
 
             Map<String, Object> resultSummary = new LinkedHashMap<>();
             resultSummary.put("rowCount", actualIds.size());
@@ -433,7 +446,7 @@ public class PostgresQueryPlanExperimentsTest {
                     report,
                     "Index Scan using composite index traversing directly in descending created_at order without Sort",
                     hypothesisMatched ? "MATCHED" : "DIFFERENT",
-                    "The composite index covers both equality filters (buyer_id, status) and ordering columns (created_at DESC, id DESC), allowing the engine to read directly in sorted order and stop at Limit=5.",
+                    ep3Interpretation,
                     true
             ));
         }

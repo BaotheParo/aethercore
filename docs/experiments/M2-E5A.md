@@ -18,7 +18,7 @@
 3. **Có mục lục kép kết hợp Lọc và Thứ Tự (Composite Index - Kịch bản EP3):**
    Mục lục được đánh chỉ mục theo cụm: `(Người Mua, Trạng Thái, Ngày Tạo GIẢM DẦN)`. Thủ thư mở thẳng mục lục tới vị trí `(Người Mua 42, PENDING)`, và đọc ngay 5 dòng đầu tiên vì chúng đã được sắp sẵn theo thứ tự thời gian mới nhất. Họ không cần gom toàn bộ, không cần sắp xếp lại, và dừng đọc ngay khi đủ 5 dòng (Early exit at Limit).
 4. **Mục lục khi tra cứu 90% cuốn sổ (Low Selectivity - Kịch bản EP4):**
-   Khi có yêu cầu: *"Tìm toàn bộ giao dịch COMPLETED"*, mà trong sổ có tới 90.000 giao dịch COMPLETED trên tổng số 100.000 dòng. Nếu dùng mục lục theo trạng thái, thủ thư phải tra mục lục rồi nhảy cóc ngẫu nhiên vào 90.000 trang khác nhau (Random I/O). Thay vào đó, lật thẳng liên tục từ trang đầu đến trang cuối (Sequential Scan) nhanh hơn nhiều lần nhờ đọc tuần tự và tận dụng bộ đệm đĩa.
+   Khi có yêu cầu: *"Tìm toàn bộ giao dịch COMPLETED"*, mà trong sổ có tới 90.000 giao dịch COMPLETED trên tổng số 100.000 dòng. Nếu dùng mục lục theo trạng thái, thủ thư phải tra mục lục rồi thực hiện hàng chục nghìn lần tra cứu ngẫu nhiên (Random I/O) vào các trang dữ liệu (nhiều bản ghi có thể nằm chung trang heap). Thay vào đó, lật thẳng liên tục từ trang đầu đến trang cuối (Sequential Scan) giảm bớt chi phí tra cứu ngẫu nhiên và tận dụng tốt bộ đệm.
 
 ---
 
@@ -117,7 +117,7 @@ Dữ liệu được trích xuất trực tiếp từ [query-plan-observations.j
 
 ### 5.1. EP1: Quét tuần tự và Sắp xếp trong bộ nhớ (Seq Scan + Top-N Sort)
 * **Kế hoạch thực thi:** `Seq Scan` phải duyệt qua toàn bộ **2.440 blocks** của bảng `query_plan_trade`. Bộ lọc `Filter: ((buyer_id = 42) AND ((status)::text = 'PENDING'::text))` loại bỏ 99.990 dòng và giữ lại đúng 10 dòng khớp.
-* Node `Sort` nhận 10 dòng này, sử dụng thuật toán `top-N heapsort` sắp xếp theo `created_at DESC, id DESC`.
+* Node `Sort` nhận 10 dòng này, sử dụng thuật toán `quicksort` (như quan sát trong raw plan JSON thực tế: `Sort Method: quicksort`) sắp xếp theo `created_at DESC, id DESC`. Sự xuất hiện của mệnh đề `LIMIT` không đồng nghĩa optimizer chắc chắn luôn chọn `top-N heapsort`.
 * Node `Limit` lấy đúng 5 dòng trên cùng.
 * **Chi phí:** Tổng cost lên tới **3.940,18**, tiêu tốn thời gian lớn nhất trong 3 kịch bản của Q1 (~7,2 ms).
 
@@ -137,8 +137,7 @@ Dữ liệu được trích xuất trực tiếp từ [query-plan-observations.j
 * **Nguyên nhân toán học của Cost Model:**
   - 90.000 trên 100.000 dòng thỏa mãn điều kiện lọc (độ chọn lọc 90%).
   - Truy vấn yêu cầu lấy `payload` (cột dữ liệu rộng, nằm trên Heap table).
-  - Nếu đi qua chỉ mục: PostgreSQL phải quét index pages, sau đó thực hiện 90.000 lần truy cập ngẫu nhiên (random page lookups với `random_page_cost = 4.0`) vào bảng dữ liệu. Chi phí ước lượng khi đó vượt xa hàng chục nghìn điểm chi phí.
-  - Ngược lại, quét tuần tự (`Seq Scan`) toàn bộ 2.440 pages theo thứ tự vật lý liên tiếp với `seq_page_cost = 1.0` tiết kiệm I/O hơn rất nhiều.
+  - Dựa trên mô hình chi phí (Cost Model): Nếu đi qua chỉ mục, PostgreSQL ước lượng chi phí cho việc quét index pages cộng với hàng chục nghìn lần truy cập ngẫu nhiên (random page lookups) vào bảng dữ liệu với `random_page_cost = 4.0`. Planner tính toán thấy chi phí ước lượng này cao hơn chi phí quét tuần tự toàn bộ 2.440 blocks liên tiếp (`seq_page_cost = 1.0`), do đó đã lựa chọn `Seq Scan`. Đây là quyết định của optimizer dựa trên thống kê và cost model tại cấu hình cụ thể đó (chưa đo đạc thực nghiệm phương án ép index).
 
 ---
 
@@ -188,7 +187,12 @@ Dưới đây là đoạn JSON trích xuất từ kịch bản **EP3** minh họ
 ### Nguyên tắc đọc plan chuẩn:
 1. **Đọc từ trong ra ngoài, từ dưới lên trên:** Nút con `Index Scan` khởi chạy trước, tìm kiếm các mục index thỏa mãn `Index Cond`. Nút cha `Limit` nhận các dòng từ nút con và cắt ngắn khi đạt đủ 5 dòng.
 2. **`Actual Rows` ở nút con bị giới hạn bởi nút cha:** Chú ý rằng `Index Scan` ước lượng có 10 dòng (`Plan Rows = 10`), nhưng thực tế chỉ quét 5 dòng (`Actual Rows = 5`) vì nút cha `Limit` đã ngắt mạch thực thi ngay khi nhận đủ dữ liệu.
-3. **Buffers là thuộc tính tích lũy:** Nút `Limit` ghi nhận `Shared Hit Blocks: 8`, con số này bao gồm chính 8 blocks mà `Index Scan` đã nạp, không được cộng dồn 8 + 8 = 16 blocks.
+3. **Buffers là thuộc tính tích lũy (Cumulative Buffers):** Nút `Limit` ghi nhận `Shared Hit Blocks: 8`, con số này bao gồm chính 8 blocks mà `Index Scan` đã nạp, không được cộng dồn 8 + 8 = 16 blocks vì nút cha bao hàm các blocks của nút con.
+4. **Phân biệt Buffer Hits vs Physical Disk Reads:**
+   - `Shared Hit Blocks` là số lần truy cập tìm thấy block trong vùng đệm chia sẻ (Shared Buffer Cache) của PostgreSQL, không đồng nghĩa với số lần đọc đĩa vật lý hay số trang vật lý duy nhất.
+   - `Shared Read Blocks` (nếu có) cũng không tự chứng minh số lần đọc đĩa vật lý trực tiếp từ thiết bị lưu trữ, do hệ điều hành còn có OS Page Cache.
+5. **Ý nghĩa của `Plan Width`:* `Plan Width` (ví dụ 176 bytes) là ước lượng của optimizer về độ rộng trung bình của các cột ở đầu ra của node, không phải kích thước lưu trữ vật lý trên đĩa của hàng dữ liệu.
+6. **Vị trí chỉ mục trong EP2:** Chỉ mục `idx_qpt_buyer` được định tuyến tại nút con `Bitmap Index Scan`. Nút cha `Bitmap Heap Scan` nạp các block dữ liệu từ bảng heap dựa trên bitmap, do đó trường index name ở nút scan đầu tiên có thể là null nhưng chỉ mục vẫn được sử dụng đầy đủ.
 
 ---
 
