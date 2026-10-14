@@ -1,0 +1,153 @@
+{
+  "schemaVersion" : "1.0.0",
+  "runId" : "prompt21-20261014-110642-19de17",
+  "timestamp" : "2026-10-14T04:07:08.180532800Z",
+  "database" : {
+    "image" : "postgres:16-alpine",
+    "serverVersion" : "16.15",
+    "databaseName" : "aethercore_idempotency_test",
+    "isolationDefault" : "read committed",
+    "currentSchema" : "public"
+  },
+  "scenarios" : [ {
+    "caseId" : "ID1",
+    "description" : "Sequential replay and lost response simulation",
+    "command" : {
+      "idempotencyKey" : "b96e6927-2013-404a-9196-8dbd6c795345",
+      "quantity" : 2,
+      "sku" : "POTION_HEAL",
+      "callerId" : "ed69be08-36e0-46c6-b7c0-3542d99fda56"
+    },
+    "expected" : {
+      "result" : "SUCCESS",
+      "stock" : 3,
+      "purchaseCount" : 1
+    },
+    "observed" : {
+      "purchaseCount" : 1,
+      "storedState" : "COMPLETED",
+      "purchaseId1" : "f740d819-eea4-4ff0-9e03-9e04646b0d56",
+      "stock" : 3,
+      "purchaseId2" : "f740d819-eea4-4ff0-9e03-9e04646b0d56",
+      "resultCode" : "SUCCESS",
+      "replayed1" : false,
+      "replayed2" : true
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "ID2",
+    "description" : "Key reuse with mismatched payload and invalid inputs",
+    "command" : {
+      "callerId" : "a772f89b-b809-470b-b139-c80c5ff9cda5",
+      "idempotencyKey" : "5d785495-fc5c-4ace-98d8-d64e1472d953"
+    },
+    "expected" : {
+      "conflictType" : "IdempotencyConflictException",
+      "stockUnchanged" : 4
+    },
+    "observed" : {
+      "exSkuThrown" : "IdempotencyConflictException",
+      "purchaseCount" : 1,
+      "finalStock" : 4,
+      "invalidKeyCount" : 0,
+      "exQtyThrown" : "IdempotencyConflictException",
+      "storedRowUnchanged" : true
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "ID3",
+    "description" : "Two requests with identical key wait on DB lock, verified by pg_blocking_pids",
+    "command" : {
+      "callerId" : "968af16c-4f49-4a7c-9439-552784da0a07",
+      "idempotencyKey" : "1d7111c5-125d-4b67-8f98-21aeaa296997"
+    },
+    "expected" : {
+      "workerABlockedWorkerB" : true,
+      "stock" : 3,
+      "purchaseCount" : 1
+    },
+    "observed" : {
+      "replayedB" : true,
+      "observedBlocking" : true,
+      "purchaseCount" : 1,
+      "blockingPidList" : [ 61 ],
+      "workerBPid" : 62,
+      "finalStock" : 3,
+      "workerAPid" : 61,
+      "purchaseIdA" : "237ca0f9-e454-4155-8738-5fbc9950466e",
+      "purchaseIdB" : "237ca0f9-e454-4155-8738-5fbc9950466e",
+      "replayedA" : false
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "ID4",
+    "description" : "Scope isolation across callerId and new idempotency keys",
+    "expected" : {
+      "totalPurchases" : 3,
+      "stock" : 7
+    },
+    "observed" : {
+      "replayed3" : false,
+      "purchaseCount" : 3,
+      "pId1" : "96a4335b-0734-4ded-ba08-0c7c2f631664",
+      "pId2" : "01b89edd-c686-45b6-9ed6-e3e07a0799c1",
+      "pId3" : "c94ade3d-8b61-4065-b354-4a2c0dfaf9a5",
+      "stock" : 7,
+      "replayed1" : false,
+      "replayed2" : false
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "ID5",
+    "description" : "SQL error after stock decrement rolls back claim and allows clean retry",
+    "expected" : {
+      "sqlState" : "23514",
+      "stockAfterRollback" : 5,
+      "stockAfterRetry" : 3
+    },
+    "observed" : {
+      "purchaseCountAfterRollback" : 0,
+      "idempotencyCountAfterRollback" : 0,
+      "idempotencyCountAfterRetry" : 1,
+      "stockAfterRollback" : 5,
+      "purchaseCountAfterRetry" : 1,
+      "observedSqlState" : "23514",
+      "stockAfterRetry" : 3
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "ID6",
+    "description" : "Replay of terminal NOT_AVAILABLE is preserved after restock; new key succeeds",
+    "expected" : {
+      "conservationTotal" : 5,
+      "replayOutcome" : "NOT_AVAILABLE",
+      "newKeyOutcome" : "SUCCESS"
+    },
+    "observed" : {
+      "newKeyResult" : "SUCCESS",
+      "totalSold" : 2,
+      "idempotencyCount" : 2,
+      "replayFlag" : true,
+      "replayResult" : "NOT_AVAILABLE",
+      "finalStock" : 3
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "ID7",
+    "description" : "Outer transaction rollback rolls back inner claim and allows retry",
+    "expected" : {
+      "retrySuccess" : true,
+      "stockAfterRollback" : 5,
+      "stockAfterRetry" : 3
+    },
+    "observed" : {
+      "purchaseCountAfterRollback" : 0,
+      "idempotencyCountAfterRollback" : 0,
+      "idempotencyCountAfterRetry" : 1,
+      "stockAfterRollback" : 5,
+      "stockAfterRetry" : 3,
+      "purchaseCountAfterRetry" : 1
+    },
+    "assertionsPassed" : true
+  } ]
+}

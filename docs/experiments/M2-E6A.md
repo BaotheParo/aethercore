@@ -210,18 +210,18 @@ Khi một service được đánh dấu `PROPAGATION_REQUIRED`, nếu nó đư�
 
 ---
 
-## 9. ??nh Ch?nh K? Thu?t & Gi?i H?n Nghi?m Thu (Prompt 20 Technical Audit)
+## 9. Đính Chính Kỹ Thuật & Giới Hạn Nghiệm Thu (Prompt 20 Technical Audit)
 
-Sau ??t r? so?t k? thu?t ??c l?p t?i Prompt 20, c?c ?i?m sau ??y ???c ch?nh th?c ??nh ch?nh v? l?m r?:
+Sau đợt rà soát kỹ thuật độc lập tại Prompt 20, các điểm sau đây được chính thức đính chính và làm rõ:
 
-| ?i?m r? so?t | Di?n ??t c? / Nguy c? nh?m l?n | Th?c t? m? ngu?n & Ranh gi?i k? thu?t |
+| Điểm rà soát | Diễn đạt cũ / Nguy cơ nhầm lẫn | Thực tế mã nguồn & Ranh giới kỹ thuật |
 |---|---|---|
-| **T?n b?ng DB** | B?o c?o c? t?ng nh?c `market_idempotency_record`, `market_purchase_order` | T?n b?ng th?c t? trong migration V3/V5 l? `market_idempotency` v? `market_purchase`. Kh?ng ??i schema ch? ?? kh?p v?n b?n. |
-| **Tr??ng payload** | T?ng nh?c `maxUnitPriceCents` | Command ch? g?m `caller_id`, `operation`, `idempotency_key`, `sku`, `quantity`. Kh?ng t? ti?n b?a th?m tr??ng nghi?p v?. |
-| **X?c th?c Caller** | "Caller ?? ???c x?c th?c" | `caller_id` l? input tin c?y theo contract t?ng ?ng d?ng; authentication/authorization ch?a ???c tri?n khai trong lab n?y. |
-| **Payload Mismatch** | Coi mismatch l? t?n c?ng c? ? | Khi key tr?ng nh?ng payload kh?c, h? th?ng n?m `IdempotencyConflictException`; ??y l? xung ??t tham s? nghi?p v?, kh?ng m?c ??nh quy k?t l? t?n c?ng c? ch? ??ch. |
-| **B?o ??m c?a Fingerprint** | Tuy?t ??i h?a h?m b?m | H?m b?m kh?ng b?o ??m to?n h?c 100% kh?ng ??ng ??; service so s?nh tr?c ti?p payload nghi?p v? g?c. |
-| **Outbox & 2PC** | Coi outbox l? exactly-once, 2PC l? b?t bu?c | Outbox kh?ng t? mang l?i exactly-once external side effects; 2PC kh?ng ph?i y?u c?u m?c ??nh cho m?i API. Ph?n t?ch c? th? transaction/dedup/retention. |
-| **Quan s?t Lock (ID3)** | Tuy?n b? quan s?t `ExclusiveLock` tr?n unique-index tuple | Test th?c t? ch? ?o l??ng s? t?n t?i c?a PID Worker A trong m?ng k?t qu? c?a `pg_blocking_pids(?::int)`. Kh?ng t? d?ng k?t lu?n v? lock mode ch?a ?o. |
-| **C? ch? Rollback (ID7)** | T?ng nh?c `setRollbackOnly()` | Test n?m `RuntimeException` ? outer transaction callback ?? Spring rollback t? nhi?n. |
-| **L? h?ng CHECK V5** | V5 ???c coi l? ho?n h?o | `CHECK` c?a V5 g?p l? h?ng 3-valued logic: `(state='COMPLETED' AND result_code IS NULL AND purchase_id IS NULL)` cho ra `UNKNOWN`, v? PostgreSQL `CHECK` ch?p nh?n `UNKNOWN`. L? h?ng n?y ???c t?i hi?n t?i MG1 v? s?a b?ng forward migration V6. |
+| **Tên bảng DB** | Báo cáo cũ từng nhắc `market_idempotency_record`, `market_purchase_order` | Tên bảng thực tế trong migration V3/V5 là `market_idempotency` và `market_purchase`. Không đổi schema chỉ để khớp văn bản. |
+| **Trường payload** | Từng nhắc `maxUnitPriceCents` | Command chỉ gồm `caller_id`, `operation`, `idempotency_key`, `sku`, `quantity`. Không tự tiện bịa thêm trường nghiệp vụ. |
+| **Xác thực Caller** | "Caller đã được xác thực" | `caller_id` là input tin cậy theo contract tầng ứng dụng; authentication/authorization chưa được triển khai trong lab này. |
+| **Payload Mismatch** | Coi mismatch là tấn công cố ý | Khi key trùng nhưng payload khác, hệ thống ném `IdempotencyConflictException`; đây là xung đột tham số nghiệp vụ, không mặc định quy kết là tấn công có chủ đích. |
+| **Bảo đảm của Fingerprint** | Tuyệt đối hóa hàm băm | Hàm băm không bảo đảm toán học 100% không đụng độ; service so sánh trực tiếp payload nghiệp vụ gốc. |
+| **Outbox & 2PC** | Coi outbox là exactly-once, 2PC là bắt buộc | Outbox không tự mang lại exactly-once external side effects; 2PC không phải yêu cầu mặc định cho mọi API. Phân tích cụ thể transaction/dedup/retention. |
+| **Quan sát Lock (ID3)** | Tuyên bố quan sát `ExclusiveLock` trên unique-index tuple | Test thực tế chỉ đo lường sự tồn tại của PID Worker A trong mảng kết quả của `pg_blocking_pids(?::int)`. Khung thời gian worker thiết lập `lock_timeout = '10s'` và `statement_timeout = '15s'`. Không tự dựng kết luận về lock mode chưa đo. |
+| **Cơ chế Rollback (ID7)** | Từng nhắc `setRollbackOnly()` | Test ném `RuntimeException` ở outer transaction callback để Spring rollback tự nhiên. |
+| **Lỗ hổng CHECK V5** | V5 được coi là hoàn hảo | `CHECK` của V5 gặp lỗ hổng 3-valued logic: `(state='COMPLETED' AND result_code IS NULL AND purchase_id IS NULL)` cho ra `UNKNOWN`, và PostgreSQL `CHECK` chấp nhận `UNKNOWN`. Lỗ hổng này được tái hiện tại MG1 và sửa bằng forward migration V6. |

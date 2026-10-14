@@ -1,0 +1,285 @@
+{
+  "schemaVersion" : "1.0.0",
+  "runId" : "prompt21-20261014-110642-19de17",
+  "timestamp" : "2026-10-14T04:07:12.700192900Z",
+  "database" : {
+    "serverVersion" : "16.15",
+    "databaseName" : "aethercore_nontransactional_test",
+    "currentUser" : "test",
+    "dockerImage" : "postgres:16-alpine",
+    "configuredLockTimeout" : "5s",
+    "configuredStatementTimeout" : "20s"
+  },
+  "flyway" : {
+    "version" : "10.10.0",
+    "scriptTransactionMode" : "executeInTransaction=false via sidecar .conf",
+    "lockMode" : "flyway.postgresql.transactional.lock=false (session-level advisory lock)"
+  },
+  "scenarios" : [ {
+    "caseId" : "NC1",
+    "description" : "CREATE INDEX CONCURRENTLY rejected inside explicit transaction block",
+    "schema" : "nc1_schema",
+    "expected" : {
+      "indexExistsAfterRollback" : false,
+      "sqlState" : "25001",
+      "rowsPreserved" : true
+    },
+    "observed" : {
+      "autoCommitMode" : false,
+      "indexCatalogAfterRollback" : {
+        "exists" : false
+      },
+      "indexExistsAfterRollback" : false,
+      "errorMessage" : "ERROR: CREATE INDEX CONCURRENTLY cannot run inside a transaction block",
+      "rowsAfterRollback" : [ {
+        "id" : 1,
+        "token" : "IRON"
+      }, {
+        "id" : 2,
+        "token" : "IRON"
+      }, {
+        "id" : 3,
+        "token" : "GOLD"
+      } ],
+      "sqlState" : "25001",
+      "rowsPreserved" : true
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "NC2",
+    "description" : "Non-transactional index build failure leaves INVALID index in pg_index and failed row in Flyway history",
+    "schema" : "nc2_schema",
+    "expected" : {
+      "indisvalid" : false,
+      "migrationFailureSqlState" : "23505",
+      "rowsPreserved" : true,
+      "indexExists" : true,
+      "indisunique" : true,
+      "v2HistorySuccess" : false
+    },
+    "observed" : {
+      "migrationFailureSqlState" : "23505",
+      "indexCatalog" : {
+        "exists" : true,
+        "indexOid" : 16400,
+        "indexName" : "uq_index_probe_token",
+        "tableName" : "index_probe",
+        "schemaName" : "nc2_schema",
+        "indisunique" : true,
+        "indisvalid" : false,
+        "indisready" : false,
+        "indislive" : true,
+        "indexDef" : "CREATE UNIQUE INDEX uq_index_probe_token ON nc2_schema.index_probe USING btree (token)"
+      },
+      "indexExists" : true,
+      "indisunique" : true,
+      "indisvalid" : false,
+      "indisready" : false,
+      "indislive" : true,
+      "indexOid" : 16400,
+      "indexDef" : "CREATE UNIQUE INDEX uq_index_probe_token ON nc2_schema.index_probe USING btree (token)",
+      "historyRows" : [ {
+        "installed_rank" : 1,
+        "version" : "1",
+        "description" : "create index probe",
+        "type" : "SQL",
+        "script" : "V1__create_index_probe.sql",
+        "checksum" : 2122173838,
+        "success" : true
+      }, {
+        "installed_rank" : 2,
+        "version" : "2",
+        "description" : "create unique token index",
+        "type" : "SQL",
+        "script" : "V2__create_unique_token_index.sql",
+        "checksum" : 820140266,
+        "success" : false
+      } ],
+      "v2HistorySuccess" : false,
+      "rowsAfter" : [ {
+        "id" : 1,
+        "token" : "IRON"
+      }, {
+        "id" : 2,
+        "token" : "IRON"
+      }, {
+        "id" : 3,
+        "token" : "GOLD"
+      } ],
+      "rowsPreserved" : true,
+      "duplicateGroups" : [ {
+        "token" : "IRON",
+        "count" : 2
+      } ],
+      "validationFailed" : true
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "NC3",
+    "description" : "Flyway repair cleans history but leaves INVALID index; recovery requires DROP INDEX, data fix, and retry",
+    "schema" : "nc3_schema",
+    "expected" : {
+      "retrySuccess" : true,
+      "repairRemovesFailedHistory" : true,
+      "uniquenessEnforced" : true,
+      "repairLeavesIndexInvalid" : true,
+      "cleanupSuccess" : true,
+      "finalIndexValid" : true
+    },
+    "observed" : {
+      "fileHashesUnchanged" : true,
+      "checkpoint2_afterRepair" : {
+        "indexCatalog" : {
+          "exists" : true,
+          "indexOid" : 16416,
+          "indexName" : "uq_index_probe_token",
+          "tableName" : "index_probe",
+          "schemaName" : "nc3_schema",
+          "indisunique" : true,
+          "indisvalid" : false,
+          "indisready" : false,
+          "indislive" : true,
+          "indexDef" : "CREATE UNIQUE INDEX uq_index_probe_token ON nc3_schema.index_probe USING btree (token)"
+        },
+        "duplicateGroups" : [ {
+          "token" : "IRON",
+          "count" : 2
+        } ],
+        "rows" : [ {
+          "id" : 1,
+          "token" : "IRON"
+        }, {
+          "id" : 2,
+          "token" : "IRON"
+        }, {
+          "id" : 3,
+          "token" : "GOLD"
+        } ],
+        "history" : [ {
+          "installed_rank" : 1,
+          "version" : "1",
+          "description" : "create index probe",
+          "type" : "SQL",
+          "script" : "V1__create_index_probe.sql",
+          "checksum" : 2122173838,
+          "success" : true
+        } ]
+      },
+      "checkpoint4_afterRetry" : {
+        "duplicateInsertSqlState" : "23505",
+        "indexCatalog" : {
+          "exists" : true,
+          "indexOid" : 16417,
+          "indexName" : "uq_index_probe_token",
+          "tableName" : "index_probe",
+          "schemaName" : "nc3_schema",
+          "indisunique" : true,
+          "indisvalid" : true,
+          "indisready" : true,
+          "indislive" : true,
+          "indexDef" : "CREATE UNIQUE INDEX uq_index_probe_token ON nc3_schema.index_probe USING btree (token)"
+        },
+        "rowsFinal" : [ {
+          "id" : 1,
+          "token" : "IRON"
+        }, {
+          "id" : 2,
+          "token" : "SILVER"
+        }, {
+          "id" : 3,
+          "token" : "GOLD"
+        }, {
+          "id" : 4,
+          "token" : "DIAMOND"
+        } ],
+        "history" : [ {
+          "installed_rank" : 1,
+          "version" : "1",
+          "description" : "create index probe",
+          "type" : "SQL",
+          "script" : "V1__create_index_probe.sql",
+          "checksum" : 2122173838,
+          "success" : true
+        }, {
+          "installed_rank" : 2,
+          "version" : "2",
+          "description" : "create unique token index",
+          "type" : "SQL",
+          "script" : "V2__create_unique_token_index.sql",
+          "checksum" : 820140266,
+          "success" : true
+        } ],
+        "validationPassed" : true,
+        "repeatMigrationCount" : 0,
+        "retrySuccess" : true
+      },
+      "checkpoint3_afterCleanup" : {
+        "indexCatalog" : {
+          "exists" : false
+        },
+        "duplicateGroups" : [ ],
+        "rows" : [ {
+          "id" : 1,
+          "token" : "IRON"
+        }, {
+          "id" : 2,
+          "token" : "SILVER"
+        }, {
+          "id" : 3,
+          "token" : "GOLD"
+        } ]
+      },
+      "checkpoint1_beforeRepair" : {
+        "indexCatalog" : {
+          "exists" : true,
+          "indexOid" : 16416,
+          "indexName" : "uq_index_probe_token",
+          "tableName" : "index_probe",
+          "schemaName" : "nc3_schema",
+          "indisunique" : true,
+          "indisvalid" : false,
+          "indisready" : false,
+          "indislive" : true,
+          "indexDef" : "CREATE UNIQUE INDEX uq_index_probe_token ON nc3_schema.index_probe USING btree (token)"
+        },
+        "duplicateGroups" : [ {
+          "token" : "IRON",
+          "count" : 2
+        } ],
+        "rows" : [ {
+          "id" : 1,
+          "token" : "IRON"
+        }, {
+          "id" : 2,
+          "token" : "IRON"
+        }, {
+          "id" : 3,
+          "token" : "GOLD"
+        } ],
+        "history" : [ {
+          "installed_rank" : 1,
+          "version" : "1",
+          "description" : "create index probe",
+          "type" : "SQL",
+          "script" : "V1__create_index_probe.sql",
+          "checksum" : 2122173838,
+          "success" : true
+        }, {
+          "installed_rank" : 2,
+          "version" : "2",
+          "description" : "create unique token index",
+          "type" : "SQL",
+          "script" : "V2__create_unique_token_index.sql",
+          "checksum" : 820140266,
+          "success" : false
+        } ]
+      },
+      "fileHashes" : {
+        "v2SqlHash" : "077fcd6152dbaf105308c34a3ad92564d4c298a5795929ed9e7ad44bf902fb9d",
+        "v2ConfHash" : "e4dcb7e56481e1cfa6575636344950eabe8d0fb11f4e556355fdd9c92c896123",
+        "v1SqlHash" : "4bce4f8c85752844a577b2f2e72e18bfef8ba06f7fe892812c03f66ede937e18"
+      }
+    },
+    "assertionsPassed" : true
+  } ]
+}

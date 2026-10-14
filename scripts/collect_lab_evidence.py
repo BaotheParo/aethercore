@@ -18,7 +18,7 @@ def _is_strict_int(val):
     return type(val) is int and not isinstance(val, bool)
 
 class EvidenceCollector:
-    def __init__(self, repo_root=None, prompt="prompt20"):
+    def __init__(self, repo_root=None, prompt="prompt21"):
         if repo_root is None:
             self.repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         else:
@@ -148,6 +148,8 @@ class EvidenceCollector:
             }
             if self.prompt in ("prompt20", "prompt21") or os.path.exists(os.path.join(staging_dir, 'migration-observations.json')):
                 required_sets['migration-observations.json'] = ["MG1", "MG2", "MG3"]
+            if self.prompt == "prompt21" or os.path.exists(os.path.join(staging_dir, 'nontransactional-index-observations.json')):
+                required_sets['nontransactional-index-observations.json'] = ["NC1", "NC2", "NC3"]
 
         validated = []
         for filename, expected_cases in required_sets.items():
@@ -198,6 +200,8 @@ class EvidenceCollector:
                     self._validate_idempotency_scenario(case_id, s)
                 elif filename == 'migration-observations.json':
                     self._validate_migration_scenario(case_id, s)
+                elif filename == 'nontransactional-index-observations.json':
+                    self._validate_nontransactional_index_scenario(case_id, s)
 
             for exp in expected_cases:
                 if exp not in found_cases:
@@ -693,6 +697,120 @@ class EvidenceCollector:
                 if not _is_strict_int(obs.get("idempotencyCountAfterRetry")) or obs.get("idempotencyCountAfterRetry") != 1:
                     raise ValidationError("Scenario ID7 idempotencyCountAfterRetry must be integer 1")
 
+
+    def _validate_nontransactional_index_scenario(self, case_id, s):
+        for req_field in ["caseId", "description", "expected", "observed", "assertionsPassed"]:
+            if req_field not in s:
+                raise ValidationError(f"Scenario {case_id} missing required field '{req_field}' in nontransactional-index-observations.json")
+        if s.get("assertionsPassed") is not True:
+            raise ValidationError(f"Scenario {case_id} assertionsPassed must be True")
+
+        obs = s.get("observed")
+        if not isinstance(obs, dict):
+            raise ValidationError(f"Scenario {case_id} observed must be a dict")
+
+        if case_id == "NC1":
+            for f in ["sqlState", "errorMessage", "autoCommitMode", "indexCatalogAfterRollback", "indexExistsAfterRollback", "rowsAfterRollback", "rowsPreserved"]:
+                if f not in obs:
+                    raise ValidationError(f"Scenario NC1 missing observed field '{f}'")
+            if obs.get("sqlState") != "25001":
+                raise ValidationError(f"Scenario NC1 sqlState must be '25001', got '{obs.get('sqlState')}'")
+            if obs.get("autoCommitMode") is not False:
+                raise ValidationError("Scenario NC1 autoCommitMode must be False")
+            if obs.get("indexExistsAfterRollback") is not False:
+                raise ValidationError("Scenario NC1 indexExistsAfterRollback must be False")
+            cat = obs.get("indexCatalogAfterRollback")
+            if not isinstance(cat, dict) or cat.get("exists") is not False:
+                raise ValidationError("Scenario NC1 indexCatalogAfterRollback.exists must be False")
+            rows = obs.get("rowsAfterRollback")
+            if not isinstance(rows, list) or len(rows) != 3:
+                raise ValidationError("Scenario NC1 rowsAfterRollback must contain exactly 3 rows")
+            if obs.get("rowsPreserved") is not True:
+                raise ValidationError("Scenario NC1 rowsPreserved must be True")
+
+        elif case_id == "NC2":
+            for f in ["migrationFailureSqlState", "indexCatalog", "indexExists", "indisunique", "indisvalid",
+                      "historyRows", "v2HistorySuccess", "rowsAfter", "rowsPreserved", "duplicateGroups", "validationFailed"]:
+                if f not in obs:
+                    raise ValidationError(f"Scenario NC2 missing observed field '{f}'")
+            if obs.get("migrationFailureSqlState") != "23505":
+                raise ValidationError(f"Scenario NC2 migrationFailureSqlState must be '23505', got '{obs.get('migrationFailureSqlState')}'")
+            if obs.get("indexExists") is not True:
+                raise ValidationError("Scenario NC2 indexExists must be True")
+            if obs.get("indisunique") is not True:
+                raise ValidationError("Scenario NC2 indisunique must be True")
+            if obs.get("indisvalid") is not False:
+                raise ValidationError("Scenario NC2 indisvalid must be False (INVALID index)")
+            if obs.get("v2HistorySuccess") is not False:
+                raise ValidationError("Scenario NC2 v2HistorySuccess must be False")
+            cat = obs.get("indexCatalog")
+            if not isinstance(cat, dict) or cat.get("indisvalid") is not False or cat.get("exists") is not True:
+                raise ValidationError("Scenario NC2 indexCatalog must record existing INVALID index")
+            rows = obs.get("rowsAfter")
+            if not isinstance(rows, list) or len(rows) != 3:
+                raise ValidationError("Scenario NC2 rowsAfter must contain exactly 3 rows")
+            dups = obs.get("duplicateGroups")
+            if not isinstance(dups, list) or len(dups) == 0:
+                raise ValidationError("Scenario NC2 duplicateGroups must not be empty")
+            if obs.get("validationFailed") is not True:
+                raise ValidationError("Scenario NC2 validationFailed must be True")
+
+        elif case_id == "NC3":
+            for f in ["fileHashesUnchanged", "checkpoint1_beforeRepair", "checkpoint2_afterRepair",
+                      "checkpoint3_afterCleanup", "checkpoint4_afterRetry"]:
+                if f not in obs:
+                    raise ValidationError(f"Scenario NC3 missing observed field '{f}'")
+            if obs.get("fileHashesUnchanged") is not True:
+                raise ValidationError("Scenario NC3 fileHashesUnchanged must be True")
+
+            cp1 = obs.get("checkpoint1_beforeRepair")
+            cp2 = obs.get("checkpoint2_afterRepair")
+            cp3 = obs.get("checkpoint3_afterCleanup")
+            cp4 = obs.get("checkpoint4_afterRetry")
+            for name, cp in [("checkpoint1", cp1), ("checkpoint2", cp2), ("checkpoint3", cp3), ("checkpoint4", cp4)]:
+                if not isinstance(cp, dict):
+                    raise ValidationError(f"Scenario NC3 {name} must be a dict")
+
+            # Checkpoint 1: before repair
+            if cp1.get("indexCatalog", {}).get("indisvalid") is not False:
+                raise ValidationError("Scenario NC3 checkpoint1 index must be INVALID")
+            h1 = cp1.get("history", [])
+            if len(h1) != 2 or h1[1].get("success") is not False:
+                raise ValidationError("Scenario NC3 checkpoint1 history must contain failed V2")
+
+            # Checkpoint 2: after repair
+            if cp2.get("indexCatalog", {}).get("indisvalid") is not False:
+                raise ValidationError("Scenario NC3 checkpoint2 index must remain INVALID after repair")
+            if cp2.get("indexCatalog", {}).get("exists") is not True:
+                raise ValidationError("Scenario NC3 checkpoint2 index must still exist after repair")
+            h2 = cp2.get("history", [])
+            if len(h2) != 1 or h2[0].get("version") != "1" or h2[0].get("success") is not True:
+                raise ValidationError("Scenario NC3 checkpoint2 history must only contain successful V1 (failed V2 removed)")
+            if len(cp2.get("duplicateGroups", [])) == 0:
+                raise ValidationError("Scenario NC3 checkpoint2 duplicate rows must not be altered by repair")
+
+            # Checkpoint 3: after cleanup
+            if cp3.get("indexCatalog", {}).get("exists") is not False:
+                raise ValidationError("Scenario NC3 checkpoint3 index must be dropped")
+            if len(cp3.get("duplicateGroups", [])) != 0:
+                raise ValidationError("Scenario NC3 checkpoint3 duplicate groups must be empty after data cleanup")
+
+            # Checkpoint 4: after retry
+            if cp4.get("retrySuccess") is not True:
+                raise ValidationError("Scenario NC3 checkpoint4 retrySuccess must be True")
+            cat4 = cp4.get("indexCatalog", {})
+            if cat4.get("exists") is not True or cat4.get("indisvalid") is not True or cat4.get("indisunique") is not True:
+                raise ValidationError("Scenario NC3 checkpoint4 final index must exist, be valid, and be unique")
+            h4 = cp4.get("history", [])
+            if len(h4) != 2 or h4[1].get("success") is not True or h4[1].get("version") != "2":
+                raise ValidationError("Scenario NC3 checkpoint4 history must contain successful V1 and V2")
+            if cp4.get("duplicateInsertSqlState") != "23505":
+                raise ValidationError(f"Scenario NC3 checkpoint4 duplicate insert must be rejected with SQLSTATE 23505, got '{cp4.get('duplicateInsertSqlState')}'")
+            if not _is_strict_int(cp4.get("repeatMigrationCount")) or cp4.get("repeatMigrationCount") != 0:
+                raise ValidationError("Scenario NC3 checkpoint4 repeatMigrationCount must be integer 0")
+            if cp4.get("validationPassed") is not True:
+                raise ValidationError("Scenario NC3 checkpoint4 validationPassed must be True")
+
     def _validate_migration_scenario(self, case_id, s):
         for req_field in ["caseId", "description", "expected", "observed", "assertionsPassed"]:
             if req_field not in s:
@@ -738,12 +856,21 @@ class EvidenceCollector:
             tt = obs.get("truthTable")
             if not isinstance(tt, list) or len(tt) != 8:
                 raise ValidationError("Scenario MG2 truthTable must contain exactly 8 entries")
+            seen_variants = set()
             for row in tt:
+                var = row.get("inputVariant")
+                if not var:
+                    var = f"{row.get('state')}|{row.get('resultCode')}|{row.get('withPurchase')}"
+                if var in seen_variants:
+                    raise ValidationError(f"Scenario MG2 truthTable has duplicate variant: {var}")
+                seen_variants.add(var)
                 if row.get("expected") != row.get("actual"):
                     raise ValidationError(f"Scenario MG2 truthTable mismatch: expected {row.get('expected')}, actual {row.get('actual')}")
                 if row.get("state") == "COMPLETED" and row.get("resultCode") is None:
                     if row.get("actual") != "REJECT" or row.get("sqlState") != "23514":
                         raise ValidationError("Scenario MG2 COMPLETED/null must be rejected with SQLSTATE 23514")
+            if len(seen_variants) != 8:
+                raise ValidationError(f"Scenario MG2 truthTable must contain 8 unique variants, found {len(seen_variants)}")
 
         elif case_id == "MG3":
             for f in ["migrationFailureSqlState", "oldConstraintRestored", "v6HistoryCountAfterFailure",
@@ -982,7 +1109,7 @@ REACTOR TOTAL: {total_reactor} Tests Run | {total_failures} Failures | {total_er
 def main():
     parser = argparse.ArgumentParser(description="AetherCore Lab Evidence Collector")
     parser.add_argument("--run", action="store_true", help="Execute full Maven clean test before collection")
-    parser.add_argument("--prompt", type=str, default="prompt20", help="Target prompt directory under docs/evidence (e.g. prompt15)")
+    parser.add_argument("--prompt", type=str, default="prompt21", help="Target prompt directory under docs/evidence (e.g. prompt15)")
     args = parser.parse_args()
 
     collector = EvidenceCollector(prompt=args.prompt)

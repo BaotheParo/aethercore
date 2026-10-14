@@ -359,20 +359,24 @@ public class MarketIdempotencyIntegrationTest {
                             if (rs.next()) {
                                 java.sql.Array arr = rs.getArray(1);
                                 if (arr != null) {
-                                    Object arrayObj = arr.getArray();
-                                    List<Long> res = new ArrayList<>();
-                                    if (arrayObj instanceof Object[]) {
-                                        for (Object o : (Object[]) arrayObj) {
-                                            if (o instanceof Number) {
-                                                res.add(((Number) o).longValue());
+                                    try {
+                                        Object arrayObj = arr.getArray();
+                                        List<Long> res = new ArrayList<>();
+                                        if (arrayObj instanceof Object[]) {
+                                            for (Object o : (Object[]) arrayObj) {
+                                                if (o instanceof Number) {
+                                                    res.add(((Number) o).longValue());
+                                                }
+                                            }
+                                        } else if (arrayObj instanceof int[]) {
+                                            for (int i : (int[]) arrayObj) {
+                                                res.add((long) i);
                                             }
                                         }
-                                    } else if (arrayObj instanceof int[]) {
-                                        for (int i : (int[]) arrayObj) {
-                                            res.add((long) i);
-                                        }
+                                        return res;
+                                    } finally {
+                                        arr.free();
                                     }
-                                    return res;
                                 }
                             }
                             return Collections.emptyList();

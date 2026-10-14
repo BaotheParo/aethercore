@@ -1,51 +1,69 @@
-# M2-E7A: CHECK/NULL, Flyway Forward Migration v? DDL Rollback Tr?n D? Li?u C? Kh?ng H?p L?
+# M2-E7A: CHECK/NULL, Flyway Forward Migration và DDL Rollback Trên Dữ Liệu Cũ Không Hợp Lệ
 
-**M? th? nghi?m:** M2-E7A
-**M?i tr??ng th? nghi?m:** Java 22, Testcontainers PostgreSQL 16.15 (image `postgres:16-alpine`), Flyway 10.10.0, Spring Boot 3.3.4
-**B?ng ch?ng ki?m ch?ng:** `docs/evidence/prompt20/migration-observations.json` & `docs/evidence/prompt20/idempotency-observations.json`
-**Tr?ng th?i ki?m th?:** 3/3 Acceptance Tests PASS (MG1, MG2, MG3), 10/10 Observation Sets Validated, Full Reactor PASS (Core Lab: 34 tests, Backend App: 85 tests)
-
----
-
-## 1. Gi?i Thi?u & M? H?nh T? Duy: Quy ??nh M?i Tr?n Kho H?ng C?
-
-H?y t??ng t??ng m?t kho h?ng ?ang ho?t ??ng:
-- Ban ??u, kho c? m?t quy ??nh ??n gi?n: m?i ??n h?ng ? tr?ng th?i "?ANG X? L?" (`PROCESSING`) th? ch?a c? m? xu?t kho (`purchase_id`) hay m? k?t qu? (`result_code`). Khi ??n h?ng chuy?n sang "HO?N TH?NH" (`COMPLETED`), ??n h?ng ph?i c? m? k?t qu? v? m? xu?t kho t??ng ?ng.
-- Nh?ng ng??i vi?t n?i quy ban ??u (Migration V5) ?? vi?t m?t c?u ?i?u ki?n m? h?. Trong SQL ba gi? tr? (Three-Valued Logic), khi m?t gi? tr? l? `NULL`, ph?p so s?nh ??ng th?c cho ra `UNKNOWN` ch? kh?ng ph?i `FALSE`. Do c? ch? c?a `CHECK constraint`, h? th?ng kho h?ng ?? v? t?nh ch?p nh?n nh?ng ki?n h?ng "HO?N TH?NH" nh?ng c? k?t qu? l?n m? xu?t kho ??u b? b? tr?ng (`COMPLETED / null / null`).
-- Khi ng??i qu?n l? ph?t hi?n ra s? h? n?y v? mu?n ban h?nh quy ??nh m?i chu?n x?c h?n (Migration V6), h? nh?n ra m?t s? th?t quan tr?ng: **vi?t m?t quy ??nh ??ng ch?a bao gi? l? ?? n?u trong kho ?ang t?n t?i nh?ng ki?n h?ng c? vi ph?m quy ??nh m?i ??.**
-
-N?u ta c? ?p quy t?c m?i l?n m?t b?ng d? li?u ?ang c? "h?ng l?i", c? s? d? li?u s? ph?n ?ng ra sao? H? th?ng migration s? l?m g?? V? t?i sao m?t l?p tr?nh vi?n chuy?n nghi?p kh?ng bao gi? ???c ph?p quay l?i s?a file quy ??nh c? V5? ?? ch?nh l? tr?ng t?m c?a lab M2-E7A.
+**Mã thử nghiệm:** M2-E7A
+**Môi trường thử nghiệm:** Java 22, Testcontainers PostgreSQL 16.15 (image `postgres:16-alpine`), Flyway 10.10.0, Spring Boot 3.3.4
+**Bằng chứng kiểm chứng:** `docs/evidence/prompt20/migration-observations.json` & `docs/evidence/prompt20/idempotency-observations.json`
+**Trạng thái kiểm thử:** 3/3 Acceptance Tests PASS (MG1, MG2, MG3), 10/10 Observation Sets Validated, Full Reactor Clean Run
 
 ---
 
-## 2. B?n Ch?t Ba Gi? Tr? (3-Valued Logic) & L? H?ng CHECK Constraint Trong V5
+## 1. Giới Thiệu & Mô Hình Tư Duy: Quy Định Mới Trên Kho Hàng Cũ
 
-### 2.1. TRUE, FALSE v? UNKNOWN trong SQL
+Hãy tưởng tượng một tổng kho giao dịch hàng hóa đã vận hành nhiều năm. Ban đầu, kho chỉ yêu cầu ghi chép: *"Nếu đơn hàng đang xử lý thì chưa có mã kết quả; nếu đơn hàng đã hoàn thành thì phải có mã kết quả và mã giao dịch mua."*
 
-Trong chu?n SQL v? PostgreSQL, bi?u th?c logic kh?ng ch? c? hai gi? tr? `TRUE` / `FALSE` m? c? ba gi? tr?: `TRUE`, `FALSE`, v? `UNKNOWN` (ph?t sinh khi t?nh to?n v?i `NULL`).
+Tuy nhiên, người soạn thảo quy chế ban đầu đã viết một mệnh đề logic lỏng lẻo. Kết quả là trong kho xuất hiện những kiện hàng được dán nhãn `COMPLETED` nhưng cả hai ô `result_code` và `purchase_id` đều để trống (`NULL`). Không ai phát hiện ra cho đến khi hệ thống đối soát tài chính bị treo.
 
-| To?n t? | Bi?u th?c | K?t qu? Logic |
+Khi ban quản lý quyết định ban hành quy chế mới chặt chẽ hơn:
+1. **Làm thế nào để áp dụng luật mới mà không làm gián đoạn các giao dịch hợp lệ đang chạy?**
+2. **Nếu trong kho vẫn còn những kiện hàng cũ bị lỗi, điều gì sẽ xảy ra khi thanh tra áp dụng quy chế mới?**
+3. **Nếu đợt thanh tra thất bại giữa chừng, toàn bộ kho hàng có bị rơi vào trạng thái "dở dang, nửa cũ nửa mới" hay không?**
+
+Thí nghiệm **M2-E7A** giải quyết chính xác bài toán này dưới góc độ kỹ thuật cơ sở dữ liệu:
+- Tìm hiểu bản chất của **3-Valued Logic** trong SQL và vì sao mệnh đề `CHECK` lại để lọt dữ liệu rỗng.
+- Thực hiện **Forward Migration (V6)** tuân thủ nguyên tắc bất biến (immutability) của Flyway.
+- Chứng minh cơ chế **Transactional DDL Rollback** của PostgreSQL khi gặp dữ liệu cũ không hợp lệ.
+- Phân biệt ranh giới giữa kiểm thử tự động, chuẩn hóa dữ liệu trên môi trường lab và quy trình xử lý thực tế trên production.
+
+---
+
+## 2. Bản Chất Ba Giá Trị (3-Valued Logic) & Lỗ Hổng CHECK Constraint Trong V5
+
+### 2.1. TRUE, FALSE và UNKNOWN trong SQL
+
+Trong hầu hết các ngôn ngữ lập trình (Java, C++, Python), kiểu boolean chỉ có hai trạng thái: `true` và `false`. Nhưng trong SQL chuẩn và PostgreSQL, luận lý học là **Tam trị (Three-Valued Logic)** gồm:
+- `TRUE`
+- `FALSE`
+- `UNKNOWN` (phát sinh khi so sánh với giá trị `NULL`)
+
+Quy tắc cơ bản của `NULL`:
+- Phép so sánh bằng hoặc khác với NULL: `col = NULL` hoặc `col <> 'SUCCESS'` khi `col` là NULL đều trả về **`UNKNOWN`** (không phải `TRUE`, cũng không phải `FALSE`).
+- Phép kiểm tra sự hiện diện của NULL: `col IS NULL` khi `col` là NULL trả về **`TRUE`**.
+- Phép kiểm tra sự tồn tại giá trị: `col IS NOT NULL` khi `col` là NULL trả về **`FALSE`**.
+
+Bảng chân lý của các toán tử logic khi có `UNKNOWN`:
+- `TRUE AND UNKNOWN` -> `UNKNOWN`
+- `FALSE AND UNKNOWN` -> `FALSE`
+- `TRUE OR UNKNOWN` -> `TRUE`
+- `FALSE OR UNKNOWN` -> `UNKNOWN`
+- `NOT UNKNOWN` -> `UNKNOWN`
+
+### 2.2. Sự Khác Biệt Giữa WHERE và CHECK Constraint
+
+Đây là điểm mấu chốt thường gây nhầm lẫn nghiêm trọng giữa lập trình viên ứng dụng và kỹ sư cơ sở dữ liệu:
+
+| Ngữ cảnh | Điều kiện chấp nhận bản ghi | Hành vi với `UNKNOWN` |
 |---|---|---|
-| Equality v?i NULL | `'SUCCESS' = NULL` | `UNKNOWN` |
-| AND v?i UNKNOWN | `TRUE AND UNKNOWN` | `UNKNOWN` |
-| OR v?i UNKNOWN | `FALSE OR UNKNOWN` | `UNKNOWN` |
+| **Mệnh đề `WHERE`** | Chỉ chấp nhận bản ghi khi điều kiện là `TRUE` | **Loại bỏ (Reject):** Dòng có kết quả `UNKNOWN` sẽ không được trả về trong kết quả truy vấn. |
+| **Ràng buộc `CHECK`** | Chấp nhận bản ghi khi điều kiện **KHÔNG PHẢI LÀ `FALSE`** (tức là `TRUE` hoặc `UNKNOWN`) | **Chấp nhận (Accept):** Dòng có kết quả `UNKNOWN` được phép INSERT/UPDATE vào bảng! |
 
-### 2.2. S? Kh?c Bi?t Gi?a WHERE v? CHECK Constraint
+> **Quy chuẩn SQL:** `CHECK` constraint kiểm tra tính toàn vẹn dữ liệu theo nguyên tắc: *"Chỉ từ chối nếu khẳng định điều kiện bị vi phạm một cách chắc chắn (`FALSE`). Nếu không chắc chắn (`UNKNOWN`), cơ sở dữ liệu mặc định cho qua."*
 
-??y l? c?u h?i ph?ng v?n kinh ?i?n l?m b?i r?i r?t nhi?u k? s? backend:
+### 2.3. Lỗ Hổng Cụ Thể Trong V5
 
-- **M?nh ?? `WHERE`**: Ch? gi? l?i c?c b?n ghi c? bi?u th?c ??nh gi? l? **`TRUE`**. B?t k? b?n ghi n?o ??nh gi? ra `FALSE` ho?c `UNKNOWN` ??u b? **lo?i b?** (filter out).
-- **R?ng bu?c `CHECK constraint`**: T? ch?i b?n ghi khi v? ch? khi bi?u th?c ??nh gi? l? **`FALSE`**. N?u bi?u th?c ??nh gi? l? **`TRUE`** ho?c **`UNKNOWN`**, PostgreSQL **ch?p nh?n (accept)** b?n ghi ??!
-
-> *Theo t?i li?u ch?nh th?c PostgreSQL 16 (Section 5.4.1):*
-> *"It should however be noted that a check constraint is satisfied if the check expression evaluates to true or the null value. Since most expressions evaluate to the null value if any operand is null, they will not prevent null values in the constrained columns."*
-
-### 2.3. L? H?ng C? Th? Trong V5
-
-Trong `V5__create_market_idempotency.sql`, r?ng bu?c ban ??u ???c vi?t:
+Trong migration `V5__create_market_idempotency.sql`, ràng buộc `chk_idempotency_state_shape` được định nghĩa như sau:
 
 ```sql
-CONSTRAINT chk_market_idempotency_state_shape CHECK (
+CONSTRAINT chk_idempotency_state_shape CHECK (
     (state = 'PROCESSING' AND result_code IS NULL AND purchase_id IS NULL)
     OR
     (state = 'COMPLETED' AND (
@@ -56,156 +74,168 @@ CONSTRAINT chk_market_idempotency_state_shape CHECK (
 )
 ```
 
-Khi m?t row c? `state = 'COMPLETED'`, `result_code = NULL`, `purchase_id = NULL`:
-1. V? tr?i: `('COMPLETED' = 'PROCESSING' ...)` -> `FALSE`.
-2. V? ph?i:
-   - `result_code = 'SUCCESS'` -> `NULL = 'SUCCESS'` -> `UNKNOWN`.
-   - `purchase_id IS NOT NULL` -> `NULL IS NOT NULL` -> `FALSE`.
-   - `UNKNOWN AND FALSE` -> `FALSE`.
-   - T??ng t?, nh?nh `result_code = 'NOT_AVAILABLE'` -> `UNKNOWN AND TRUE` -> `UNKNOWN`.
-   - K?t h?p hai nh?nh: `FALSE OR UNKNOWN` -> `UNKNOWN`.
-   - V? ngo?i c?ng: `state = 'COMPLETED' AND UNKNOWN` -> `TRUE AND UNKNOWN` -> **`UNKNOWN`**.
-3. To?n b? `CHECK`: `FALSE OR UNKNOWN` -> **`UNKNOWN`**.
-4. V? k?t qu? l? `UNKNOWN`, PostgreSQL **cho ph?p l?u d?ng n?y v?o DB**!
+Giả sử ta chèn một bản ghi bị lỗi (malformed): `state = 'COMPLETED'`, `result_code = NULL`, `purchase_id = NULL`:
+1. Nhánh `PROCESSING`: `state = 'PROCESSING'` là `FALSE`. Toàn bộ nhánh là `FALSE`.
+2. Nhánh `COMPLETED`: `state = 'COMPLETED'` là `TRUE`.
+   - Xét biểu thức con 1: `(result_code = 'SUCCESS' AND purchase_id IS NOT NULL)`
+     `result_code = 'SUCCESS'` với `NULL = 'SUCCESS'` cho ra `UNKNOWN`.
+     `purchase_id IS NOT NULL` với `NULL IS NOT NULL` cho ra `FALSE`.
+     -> `UNKNOWN AND FALSE` = `FALSE`.
+   - Xét biểu thức con 2: `(result_code = 'NOT_AVAILABLE' AND purchase_id IS NULL)`
+     `result_code = 'NOT_AVAILABLE'` với `NULL = 'NOT_AVAILABLE'` cho ra `UNKNOWN`.
+     `purchase_id IS NULL` với `NULL IS NULL` cho ra `TRUE`.
+     -> `UNKNOWN AND TRUE` = **`UNKNOWN`**!
+   - Kết hợp hai biểu thức con: `FALSE OR UNKNOWN` = **`UNKNOWN`**.
+3. Kết hợp toàn bộ ràng buộc: `FALSE OR (TRUE AND UNKNOWN)` = `FALSE OR UNKNOWN` = **`UNKNOWN`**!
 
-?i?u n?y cho ph?p d? li?u v? ngh?a xu?t hi?n trong b?ng: tr?ng th?i ?? xong (`COMPLETED`) nh?ng kh?ng ai bi?t k?t qu? l? g? (`result_code IS NULL`).
+Vì kết quả là `UNKNOWN` (không phải `FALSE`), PostgreSQL chấp nhận dòng dữ liệu này! Đây chính là **lỗ hổng hình thái (state shape flaw)** mà thí nghiệm MG1 đã tái hiện thành công.
 
 ---
 
-## 3. NOT NULL C?ng vs R?ng Bu?c Ph? Thu?c Tr?ng Th?i
+## 3. NOT NULL Cứng vs Ràng Buộc Phụ Thuộc Trạng Thái
 
-T?i sao ta kh?ng ??n gi?n ??t `result_code VARCHAR(32) NOT NULL` tr?n c?t?
-- V? trong b?ng idempotency, b?n ghi c? v?ng ??i hai giai ?o?n:
-  1. Khi m?t giao d?ch ?ang ch?y (`state = 'PROCESSING'`), n? **b?t bu?c** ch?a c? k?t qu? (`result_code` ph?i l? `NULL`) v? ch?a c? ??n h?ng (`purchase_id` ph?i l? `NULL`).
-  2. Ch? khi giao d?ch ho?n t?t (`state = 'COMPLETED'`), `result_code` m?i ???c ph?p c? gi? tr? v? kh?ng ???c ph?p `NULL`.
-- N?u ??t `NOT NULL` c?ng tr?n c?t, ta s? ch?n ??ng tr?ng th?i `PROCESSING`, ph? v? ho?n to?n c? ch? claim kh?a idempotency.
-- Do ??, ta b?t bu?c ph?i s? d?ng **r?ng bu?c to?n v?n c? ?i?u ki?n ph? thu?c tr?ng th?i (state-dependent shape constraint)**:
+Tại sao ta không đơn giản đặt `result_code VARCHAR(16) NOT NULL` ngay từ đầu?
+
+Bởi vì `market_idempotency` là một **máy trạng thái (state machine)**:
+- Khi request vừa tới, trạng thái là `PROCESSING`: tại thời điểm này, giao dịch chưa hoàn tất, kho hàng chưa được trừ, chưa thể biết kết quả thành công hay thất bại. Do đó, `result_code` và `purchase_id` **bắt buộc phải là `NULL`**.
+- Khi giao dịch hoàn tất, trạng thái chuyển sang `COMPLETED`: lúc này `result_code` **bắt buộc phải có giá trị** (`SUCCESS` hoặc `NOT_AVAILABLE`).
+
+Nếu đặt `NOT NULL` ở cấp độ cột:
+- Ta không thể lưu được bản ghi ở trạng thái `PROCESSING`.
+- Hoặc ta bị ép buộc phải bịa ra các giá trị giả tạo như `result_code = 'PENDING'`, làm ô nhiễm miền giá trị nghiệp vụ và phức tạp hóa các câu lệnh truy vấn báo cáo.
+
+Giải pháp chuẩn mực là: Cho phép cột mang giá trị `NULL` ở cấp độ schema vật lý, nhưng kiểm soát chặt chẽ mối liên hệ giữa các cột theo trạng thái thông qua `CHECK` constraint.
+
+Trong `V6__fix_market_idempotency_state_shape.sql`, ta sửa lại mệnh đề nhánh `COMPLETED`:
 
 ```sql
--- S?a ??i trong V6:
-(state = 'COMPLETED' AND result_code IS NOT NULL AND (
-    (result_code = 'SUCCESS' AND purchase_id IS NOT NULL)
+ALTER TABLE market_idempotency DROP CONSTRAINT chk_idempotency_state_shape;
+
+ALTER TABLE market_idempotency ADD CONSTRAINT chk_idempotency_state_shape CHECK (
+    (state = 'PROCESSING' AND result_code IS NULL AND purchase_id IS NULL)
     OR
-    (result_code = 'NOT_AVAILABLE' AND purchase_id IS NULL)
-))
+    (state = 'COMPLETED' AND result_code IS NOT NULL AND (
+        (result_code = 'SUCCESS' AND purchase_id IS NOT NULL)
+        OR
+        (result_code = 'NOT_AVAILABLE' AND purchase_id IS NULL)
+    ))
+);
 ```
 
-B?ng c?ch th?m `result_code IS NOT NULL`, khi `result_code` l? `NULL`, bi?u th?c `result_code IS NOT NULL` tr? v? `FALSE` d?t kho?t, k?o to?n b? v? `COMPLETED` v? `FALSE`, khi?n PostgreSQL t? ch?i v?i l?i SQLSTATE `23514` (`check_violation`).
+Nhờ có `result_code IS NOT NULL`:
+- Nếu `result_code` là NULL, điều kiện `result_code IS NOT NULL` trả về `FALSE`.
+- `FALSE AND (...)` lập tức biến toàn bộ nhánh `COMPLETED` thành `FALSE`.
+- Biểu thức tổng thể là `FALSE OR FALSE` = **`FALSE`**.
+- Bản ghi malformed bị PostgreSQL từ chối dứt khoát với mã lỗi SQLSTATE `23514` (`check_violation`).
 
 ---
 
-## 4. T?i Sao Ph?i Forward Migration (V6) Thay V? S?a V5?
+## 4. Tại Sao Phải Forward Migration (V6) Thay Vì Sửa V5?
 
-M?t nguy?n t?c s?ng c?n trong qu?n tr? c? s? d? li?u chuy?n nghi?p: **Migration ?? ???c commit v? deploy l?n m?i tr??ng ngo?i l? b?t bi?n (immutable).**
+Một phản xạ sai lầm rất phổ biến của lập trình viên là: *"File V5 viết sai thì mở file `V5__create_market_idempotency.sql` ra sửa lại constraint, rồi commit lại Git."*
 
-1. **Flyway Checksum Validation:** Flyway l?u m? b?m CRC32/SHA-256 c?a t?ng file migration v?o b?ng `flyway_schema_history`. N?u s?a tr?c ti?p file V5, trong l?n kh?i ??ng ti?p theo tr?n b?t k? m?i tr??ng n?o ?? ch?y V5 (Staging, Pre-prod, Production), Flyway s? n?m ngo?i l?:
-   ```text
-   FlywayException: Validate failed: Migration checksum mismatch for migration version 5
-   ```
-   ?ng d?ng s? d?ng kh?i ??ng ho?n to?n (crash on startup).
-2. **Fresh Install vs Production Upgrade:**
-   - Tr?n m?y ph?t tri?n c?c b?, b?n c? th? x?a s?ch database (`dropdb`) v? ch?y l?i t? ??u; khi ?? s?a V5 tr?ng c? v? "g?n g?ng" v? pass test.
-   - Nh?ng tr?n Production v?i h?ng tri?u ng??i d?ng, b?n **kh?ng th? x?a database**. DB th?c t? ?ang ? schema V5 v? ch?a d? li?u s?ng.
-3. **T?nh Ti?n Tr?nh (Forward-only):** M?i s? thay ??i v? quy t?c d? li?u ??u ph?i ???c bi?u di?n b?ng m?t b??c ?i m?i: t?o file `V6__fix_market_idempotency_state_shape.sql`.
+Trong phát triển phần mềm doanh nghiệp, cách làm này bị **nghiêm cấm tuyệt đối** vì các lý do sau:
+
+1. **Nguyên tắc Bất biến (Immutability):** Migration một khi đã được merge vào nhánh chính (`main`) và đã được deploy lên bất kỳ môi trường nào (dev, staging, production) thì nội dung file đó là bất biến.
+2. **Cơ chế Checksum của Flyway:**
+   - Khi Flyway thực thi một script migration, nó tính toán một giá trị checksum theo thuật toán **CRC32** (`java.util.zip.CRC32`) dựa trên các dòng văn bản của file và lưu vào bảng `flyway_schema_history`.
+   - Lưu ý quan trọng về thuật ngữ: Giá trị checksum của Flyway 10.10.0 là số nguyên CRC32 (ví dụ: `1540923812`), hoàn toàn phân biệt với chuỗi băm byte-level SHA-256 (ví dụ: `a4f8c9...`) mà bộ harness của lab tính toán trong hàm `computeV6ResourceHash()` để chứng thực tính toàn vẹn của file trên ổ đĩa.
+   - Nếu bạn sửa nội dung file V5 trên đĩa, trong lần khởi động tiếp theo, Flyway gọi `validate()`: nó so sánh CRC32 của file V5 mới với CRC32 đã ghi trong `flyway_schema_history`. Phát hiện lệch checksum, Flyway sẽ ném ngoại lệ `ValidateException` và dừng toàn bộ ứng dụng ngay lập tức!
+3. **Phân kỳ môi trường (Environment Drift):** Database production đã chạy V5 cũ sẽ không bao giờ chạy lại V5 nữa (vì đã có bản ghi `success = true` trong lịch sử). Database mới tạo lại chạy theo V5 mới. Hai môi trường sẽ mang hai cấu trúc constraint khác nhau dù cùng mang danh là "ở version 5".
+
+**Quy tắc vàng:** Lỗi ở version $N$ phải được sửa bằng một forward migration ở version $N+1$.
 
 ---
 
-## 5. DDL Rollback Trong PostgreSQL & Gi?i H?n C?a Flyway
+## 5. DDL Rollback Trong PostgreSQL & Giới Hạn Của Flyway
 
-### 5.1. PostgreSQL H? Tr? Transactional DDL
+### 5.1. PostgreSQL Hỗ Trợ Transactional DDL
 
-Kh?ng gi?ng nh? MySQL hay Oracle (n?i h?u h?t c?u l?nh DDL t? ??ng commit v? kh?ng th? rollback), PostgreSQL h? tr? **Transactional DDL** cho ph?n l?n c?c l?nh schema (ngo?i tr? m?t s? l?nh nh? `CREATE DATABASE`, `VACUUM`, `CREATE INDEX CONCURRENTLY`).
+PostgreSQL là một trong số ít các hệ quản trị cơ sở dữ liệu hiện đại hỗ trợ **Transactional DDL** một cách toàn diện (khác với MySQL hay Oracle nơi hầu hết các câu lệnh DDL đều ngầm kích hoạt commit và không thể rollback).
 
-Khi Flyway th?c thi m?t file migration, Flyway b?c to?n b? n?i dung file ?? trong m?t database transaction:
+Trong PostgreSQL, bạn có thể thực hiện:
 ```sql
 BEGIN;
-ALTER TABLE market_idempotency DROP CONSTRAINT chk_market_idempotency_state_shape;
-ALTER TABLE market_idempotency ADD CONSTRAINT chk_market_idempotency_state_shape CHECK (...);
--- Ghi nh?n v?o flyway_schema_history
-COMMIT;
+ALTER TABLE market_idempotency DROP CONSTRAINT chk_idempotency_state_shape;
+ALTER TABLE market_idempotency ADD CONSTRAINT chk_idempotency_state_shape CHECK (...);
+-- Nếu có lỗi xảy ra tại đây:
+ROLLBACK;
+```
+Lệnh `ROLLBACK` sẽ hoàn tác toàn bộ: constraint cũ được phục hồi, bảng trở lại trạng thái nguyên vẹn như trước khi mở transaction.
+
+### 5.2. Chuyện Gì Xảy Ra Khi Bảng Chứa Dữ Liệu Cũ Không Hợp Lệ?
+
+Khi chạy câu lệnh `ALTER TABLE ... ADD CONSTRAINT ... CHECK (...)`:
+PostgreSQL sẽ thực hiện quét toàn bộ các dòng hiện có trong bảng (table scan) để xác thực (validate) dữ liệu cũ có tuân thủ ràng buộc mới hay không.
+
+Nếu phát hiện dù chỉ **một dòng duy nhất** vi phạm:
+1. Câu lệnh `ALTER TABLE` ném ngoại lệ vi phạm ràng buộc (SQLSTATE `23514`).
+2. Do Flyway mặc định bọc toàn bộ script migration trong một transaction (`BEGIN ... COMMIT`), transaction gặp lỗi bị hủy bỏ.
+3. PostgreSQL tự động rollback toàn bộ transaction:
+   - Lệnh `DROP CONSTRAINT` trước đó bị hủy bỏ, constraint V5 ban đầu được bảo toàn nguyên vẹn.
+   - Không có thay đổi nào được áp dụng vào catalog của PostgreSQL.
+4. Flyway bắt được ngoại lệ SQL:
+   - Vì toàn bộ transaction bị rollback, câu lệnh ghi log vào `flyway_schema_history` cũng bị rollback theo!
+   - Bảng `flyway_schema_history` **hoàn toàn không có dòng nào của version 6** (không có cả dòng failed lẫn dòng success). Trạng thái schema history vẫn dừng lại ở version 5 nguyên thủy.
+
+### 5.3. Bằng Chứng Thực Nghiệm Từ Lab MG3
+
+Kịch bản **MG3** đã chứng minh thực nghiệm cơ chế này:
+- Schema `mg3_schema` đang ở V5, được cố tình chèn 1 dòng hợp lệ (`COMPLETED/SUCCESS/purchaseId`) và 1 dòng malformed (`COMPLETED/null/null`).
+- Chạy `flywayV6.migrate()`: Quá trình thất bại chính xác với SQLSTATE `23514`.
+- Mở kết nối mới kiểm tra:
+  - Cả 2 dòng dữ liệu (hợp lệ và malformed) vẫn còn nguyên vẹn trong bảng (`rowsBefore == rowsAfter`).
+  - Định nghĩa constraint hiện tại trùng khớp 100% với định nghĩa V5 ban đầu (`v5ConstraintDef.equals(restoredDef)`).
+  - Thử nghiệm chèn một bản ghi vi phạm cấu trúc V5 (`state = 'COMPLETED', result_code = 'SUCCESS', purchase_id = NULL`) bị PostgreSQL từ chối với SQLSTATE `23514` và tên constraint `chk_idempotency_state_shape`, chứng minh constraint V5 vẫn đang bảo vệ bảng.
+  - Bảng `flyway_schema_history` có đúng 5 dòng (V1..V5), số lượng bản ghi V6 là 0 (`v6HistoryCountAfterFailure = 0`).
+
+---
+
+## 6. Ý Nghĩa Của `migrate`, `validate`, và `repair`
+
+Ba lệnh cốt lõi của Flyway có ranh giới và trách nhiệm hoàn toàn khác nhau:
+
+| Lệnh Flyway | Trách nhiệm chính | Hành vi trên PostgreSQL trong kịch bản MG3 |
+|---|---|---|
+| **`migrate`** | Quét các script chưa thực thi và chạy tuần tự theo phiên bản | Khi gặp lỗi ở V6, transactional DDL rollback giúp database và history sạch sẽ. Sau khi dọn dữ liệu lỗi, gọi lại `migrate()` thành công ngay mà không cần can thiệp metadata. |
+| **`validate`** | Kiểm tra tính tương thích giữa các file migration trên classpath và lịch sử trong DB (so sánh version, description, checksum CRC32) | Xác nhận các file V1..V5 không bị sửa đổi trái phép và không có migration nào bị bỏ sót hoặc phân kỳ. |
+| **`repair`** | Sửa chữa metadata trong bảng `flyway_schema_history` (xóa các dòng failed, cập nhật lại checksum nếu có thay đổi được phê duyệt) | **Không cần dùng trong MG3**, vì PostgreSQL đã rollback sạch dòng V6. (Lưu ý: `repair` sẽ tối quan trọng trong các trường hợp non-transactional migration như `CREATE INDEX CONCURRENTLY` ở module M2-E7B). |
+
+---
+
+## 7. Xử Lý Dữ Liệu Lỗi Trên Production: Không Tự Ý Phỏng Đoán
+
+Trong bài test lab `MarketIdempotencyMigrationTest.java`, sau khi migration V6 thất bại, ta đã thực hiện xóa dòng malformed bằng câu lệnh:
+```sql
+DELETE FROM market_idempotency WHERE caller_id = ? AND idempotency_key = ?;
 ```
 
-### 5.2. Chuy?n G? X?y Ra Khi B?ng Ch?a D? Li?u C? Kh?ng H?p L??
+> **CẢNH BÁO KIẾN TRÚC NGHIỆP VỤ:**
+> Thao tác `DELETE` trong bài test là để phục vụ kịch bản kiểm thử tự động trên một fixture cô lập có key xác định. **Đây tuyệt đối không phải là khuyến nghị hay cẩm nang vận hành trên môi trường Production!**
 
-K?ch b?n MG3 trong lab t?i hi?n ch?nh x?c t?nh hu?ng n?y:
-1. Schema ?ang ? V5.
-2. B?ng ?ang ch?a 1 d?ng h?p l? (`PROCESSING`) v? 1 d?ng malformed (`COMPLETED / null / null`).
-3. Flyway ch?y V6:
-   - B??c 1: `DROP CONSTRAINT` th?nh c?ng trong transaction.
-   - B??c 2: `ADD CONSTRAINT` ki?m tra to?n b? c?c d?ng hi?n c? trong b?ng (table scan validation). Ph?t hi?n d?ng malformed vi ph?m bi?u th?c m?i.
-   - PostgreSQL l?p t?c n?m l?i SQLSTATE `23514` (`check_violation`).
-   - Transaction c?a Flyway b? **`ABORT`** v? k?ch ho?t **`ROLLBACK`**.
-
-### 5.3. B?ng Ch?ng Th?c Nghi?m T? Lab MG3
-
-K?t qu? ?o ??c t? lab PostgreSQL th?t trong `migration-observations.json`:
-- **L?nh `DROP CONSTRAINT` c? b? rollback kh?ng?** **C?.** Khi c?u l?nh `ADD CONSTRAINT` b? fail, transaction rollback ho?n to?n, kh?i ph?c l?i r?ng bu?c c? c?a V5 (`oldConstraintRestored = true`).
-- **D? li?u trong b?ng c? b? m?t m?t kh?ng?** **KH?NG.** C? d?ng h?p l? v? d?ng malformed ??u c?n nguy?n v?n.
-- **B?ng `flyway_schema_history` c? b? ghi nh?n V6 fail kh?ng?** Trong h?p ??ng transactional c?a PostgreSQL, b?n ghi V6 ch?a h? ???c commit. Sau rollback, s? l??ng b?n ghi V6 trong history l? **0** (`v6HistoryCountAfterFailure = 0`), schema version v?n gi? nguy?n l? **5**.
-- **Kh?ng c?n `flyway repair`!** V? transaction ?? rollback s?ch s?, schema history kh?ng b? ? tr?ng th?i d? dang (`failed`). Sau khi ti?n h?nh d?n d?p d?ng r?c nghi?p v? (`DELETE FROM market_idempotency WHERE state='COMPLETED' AND result_code IS NULL`), ta ch? c?n ch?y l?i ??ng file V6 (v?i SHA-256 hash nguy?n v?n), migration s? th?nh c?ng 100% (`retrySuccess = true`).
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Admin as Dev / Pipeline
-    participant FW as Flyway Engine
-    participant PG as PostgreSQL (Transaction)
-    participant Table as market_idempotency
-    participant Hist as flyway_schema_history
-
-    Admin->>FW: migrate() to V6
-    FW->>PG: BEGIN TRANSACTION
-    PG->>Table: DROP CONSTRAINT chk_market_idempotency_state_shape (OK)
-    PG->>Table: ADD CONSTRAINT ... CHECK (...) (Validate rows)
-    Table-->>PG: Error 23514 (check_violation on legacy row)
-    PG->>FW: Migration Failed Exception
-    FW->>PG: ROLLBACK
-    Note over PG,Table: DROP CONSTRAINT b? h?y, constraint V5 ???c kh?i ph?c!<br/>flyway_schema_history gi? nguy?n version 5.
-    Admin->>Table: ?i?u tra & X?a d?ng malformed (Business Cleanup)
-    Admin->>FW: migrate() l?i v?i c?ng file V6
-    FW->>PG: BEGIN -> DROP -> ADD (Valid) -> Record History -> COMMIT
-    PG-->>FW: Successfully applied 1 migration (v6)
-```
+Trên hệ thống thật, nếu migration gặp lỗi dữ liệu:
+1. **Tuyệt đối không chạy lệnh `DELETE` bừa bãi:** Một bản ghi `COMPLETED` bị thiếu `result_code` có thể là kết quả của một giao dịch thanh toán thực tế của khách hàng nhưng bị lỗi mạng ở bước ghi nhận kết quả. Xóa bản ghi có thể dẫn tới mất dấu vết kiểm toán (audit trail), gây sai lệch số dư tài khoản hoặc khiến khách hàng bị trừ tiền mà không nhận được hàng.
+2. **Quy trình chuẩn hóa dữ liệu 3 bước trên Production:**
+   - **Bước 1: Điều tra và Đối soát (Investigation):** Truy vấn chéo với bảng thanh toán bên thứ ba (payment gateway) hoặc bảng đơn hàng `market_purchase` để xác định bản chất thực của giao dịch.
+   - **Bước 2: Cập nhật dữ liệu hợp lệ (Data Remediation Script):** Nếu giao dịch thực tế đã thành công, chạy script cập nhật bổ sung `result_code = 'SUCCESS'` và `purchase_id` tương ứng. Nếu giao dịch thực tế đã hủy, cập nhật `result_code = 'NOT_AVAILABLE'`.
+   - **Bước 3: Phê duyệt nghiệp vụ (Sign-off):** Mọi script sửa đổi dữ liệu cũ phải được review bởi Data Lead và Product Owner trước khi chạy trên Production.
 
 ---
 
-## 6. ? Ngh?a C?a `migrate`, `validate`, v? `repair`
+## 8. Bảng Tổng Hợp Kiểm Nghiệm Thực Tế (MG1 – MG3)
 
-L?p tr?nh vi?n th??ng hi?u nh?m c?ng d?ng c?a c?c l?nh Flyway:
+Toàn bộ kết quả kiểm chứng được trích xuất từ `docs/evidence/prompt20/migration-observations.json`:
 
-1. **`flyway:migrate`**: Qu?t th? m?c migration, so s?nh v?i `flyway_schema_history`, th?c thi c?c file migration m?i theo th? t? version.
-2. **`flyway:validate`**: Ki?m tra c?c migration ?? ?p d?ng tr?n DB c? c?n kh?p checksum v? t?n file v?i m? ngu?n hi?n t?i hay kh?ng. Gi?p ph?t hi?n s?m vi?c ai ?? v? t?nh s?a file c?.
-3. **`flyway:repair`**: **CH? s?a ??i metadata c?a Flyway**, tuy?t ??i **KH?NG can thi?p v?o b?ng d? li?u nghi?p v?**.
-   - `repair` x?a c?c d?ng migration b? ??nh d?u `failed = true` (th??ng x?y ra tr?n c?c database kh?ng h? tr? transactional DDL nh? MySQL).
-   - `repair` c?n ch?nh l?i checksum c?a c?c file ?? apply n?u c? s? thay ??i ???c ph? duy?t.
-   - `repair` **kh?ng bao gi?** t? ??ng s?a d?ng `COMPLETED / null / null` trong b?ng `market_idempotency`.
-
----
-
-## 7. X? L? D? Li?u L?i Tr?n Production: Kh?ng T? ? Ph?ng ?o?n
-
-Trong m?i tr??ng th?c t?, n?u g?p d? li?u vi ph?m khi ch?y migration:
-1. **Kh?ng bao gi? t? ? s?a d? li?u theo c?m t?nh:**
-   - B?n kh?ng th? t? ??ng bi?n m?t b?n ghi `COMPLETED / null / null` th?nh `result_code = 'SUCCESS'` hay `'NOT_AVAILABLE'`. Li?u ti?n c?a kh?ch h?ng ?? b? tr? ch?a? H?ng trong kho ?? xu?t kho th?c t? ch?a?
-2. **Quy tr?nh chu?n k? thu?t:**
-   - Ph?n t?ch nguy?n nh?n g?c (root-cause analysis): l?i code ? version n?o ?? t?o ra d?ng n?y?
-   - ??i so?t nghi?p v? (business reconciliation): ??i chi?u log ?ng d?ng, webhook c?ng thanh to?n ho?c h?a ??n.
-   - Vi?t data migration script c? ki?m so?t (pre-migration cleanup) ?? ??a d? li?u v? tr?ng th?i h?p l? tr??c khi ?p d?ng schema constraint m?i.
+| Case ID | Mục tiêu kiểm chứng | Trạng thái mong đợi (Expected) | Kết quả quan sát thực tế (Observed) | SQLSTATE | Kết luận |
+|---|---|---|---|:---:|:---:|
+| **MG1** | Tái hiện lỗi V5 & Forward Migration V6 bảo toàn dữ liệu | V5 nhận malformed row; V6 nâng cấp thành công; 3 dòng hợp lệ được bảo toàn nguyên vẹn; chạy lại migrate 0 script | `v5MalformedAccepted = true`, `v6Success = true`, `validDataPreserved = true`, `repeatMigrationCount = 0`, V1-V5 checksums không đổi | - | **PASS** |
+| **MG2** | Bảng chân lý 8 tổ hợp sau V6 & Chặn đứng thao tác UPDATE sai | Chấp nhận 3 tổ hợp đúng; từ chối 5 tổ hợp sai; chặn UPDATE thành malformed shape | Chấp nhận đúng 3 dạng; 5 dạng sai bị từ chối với SQLSTATE `23514`; lệnh UPDATE bị chặn, dữ liệu cũ giữ nguyên | `23514` | **PASS** |
+| **MG3** | DDL Rollback khi dữ liệu cũ vi phạm & Retry không đổi file | V6 fail do dữ liệu; DDL rollback khôi phục constraint V5; history không chứa V6; xóa fixture lỗi & retry thành công | `migrationFailureSqlState = 23514`, `oldConstraintRestored = true`, `v6HistoryCountAfterFailure = 0`, `retrySuccess = true`, V6 file hash không đổi | `23514` | **PASS** |
 
 ---
 
-## 8. B?ng T?ng H?p Ki?m Nghi?m Th?c T? (MG1 ? MG3)
+## 9. Kết Luận Kiến Trúc
 
-| K?ch b?n | M?c ti?u | K?t qu? mong ??i | Gi? tr? ?o th?c t? (Observed) | Tr?ng th?i |
-|---|---|---|---|---|
-| **MG1** | N?ng c?p t? V5 l?n V6 khi d? li?u c? h?p l? | V5 ch?p nh?n malformed; V6 th?nh c?ng; d? li?u b?o to?n; migrate l?p l?i kh?ng sinh version m?i | `v5MalformedAccepted`: true<br/>`v6Success`: true<br/>`validDataPreserved`: true<br/>`repeatMigrationCount`: 0<br/>`historyCount`: 6 | **PASS** |
-| **MG2** | Ki?m ch?ng 8 tr??ng h?p truth table sau V6 | Ch? 3 tr?ng th?i h?p l? ???c ACCEPT; 5 tr?ng th?i sai b? REJECT v?i SQLSTATE 23514; row nguy?n v?n sau UPDATE l?i | 8/8 combinations match expected exactly.<br/>`updateRejected`: true<br/>`updateSqlState`: "23514"<br/>`rowIntactAfterUpdateFailure`: true | **PASS** |
-| **MG3** | Rollback DDL khi g?p d? li?u c? l?i v? retry | Migration fail v?i 23514; DDL rollback kh?i ph?c constraint c?; history s?ch; retry c?ng hash th?nh c?ng | `migrationFailureSqlState`: "23514"<br/>`oldConstraintRestored`: true<br/>`v6HistoryCountAfterFailure`: 0<br/>`v6FileHashUnchanged`: true<br/>`retrySuccess`: true<br/>`finalHistoryCount`: 6 | **PASS** |
-
----
-
-## 9. K?t Lu?n Ki?n Tr?c
-
-1. **Hi?u s?u c? ch? ng?n ng?:** SQL 3-valued logic l? ngu?n g?c c?a nhi?u l?i b?o m?t v? to?n v?n d? li?u ti?m ?n. `CHECK` ch?p nh?n `UNKNOWN`, do ?? c?c bi?u th?c ph? thu?c tr?ng th?i lu?n ph?i c? `IS NOT NULL` b?o v? r? r?ng.
-2. **T?n tr?ng t?nh b?t bi?n:** Kh?ng bao gi? s?a file migration c? ?? b?n giao. M?i c?i ti?n ??u ph?i l? b??c ?i ti?p theo (Forward Migration).
-3. **Hi?u r? n?n t?ng database:** PostgreSQL h? tr? Transactional DDL gi?p b?o v? h? th?ng to?n v?n khi migration th?t b?i. Hi?u ???c ranh gi?i gi?a DDL transaction v? data cleanup gi?p k? s? t? tin x? l? s? c? database ? quy m? l?n.
+1. **Hiểu rõ 3-Valued Logic là bắt buộc đối với kỹ sư Backend/Data:** Luôn lường trước khả năng điều kiện trả về `UNKNOWN` khi viết các ràng buộc `CHECK`. Một ràng buộc không bao hàm `IS NOT NULL` rất dễ trở thành "cửa sau" tiếp tay cho dữ liệu rác.
+2. **Tôn trọng tính bất biến của Migration:** Không bao giờ sửa các migration đã commit. Luôn tiến về phía trước bằng Forward Migration để đảm bảo tính nhất quán trên toàn bộ các môi trường.
+3. **Tận dụng sức mạnh của PostgreSQL Transactional DDL:** Hiểu rõ cơ chế tự bảo vệ của PostgreSQL giúp kỹ sư tự tin triển khai các đợt nâng cấp schema phức tạp, biết chính xác khi nào hệ thống an toàn và khi nào cần can thiệp chuẩn hóa dữ liệu.

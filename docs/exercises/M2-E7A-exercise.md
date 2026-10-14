@@ -1,132 +1,125 @@
-# B?i T?p M2-E7A: R?ng Bu?c CHECK, NULL Logic V? Rollback Khi N?ng C?p Schema
+# Bài Tập M2-E7A: Ràng Buộc CHECK, NULL Logic Và Rollback Khi Nâng Cấp Schema
 
-**M? b?i t?p:** M2-E7A-EX
-**Ch? ??:** SQL 3-Valued Logic, Conditional CHECK Constraint, Flyway Forward Migration & Transactional DDL Rollback
-**M?c ti?u:** T? x?y d?ng r?ng bu?c to?n v?n kh?ng b? loophole NULL, thi?t k? chi?n l??c migration khi DB c? d? li?u legacy l?i, v? hi?u s?u c? ch? rollback DDL c?a PostgreSQL.
-
----
-
-## 1. B?i C?nh B?i T?p
-
-M?t h? th?ng ph?n t?n thu th?p d? li?u vi?n tr?c (Telemetry Service) l?u c?c job x? l? v?o b?ng `telemetry_job`:
-
-```sql
-CREATE TABLE telemetry_job (
-    id UUID PRIMARY KEY,
-    job_type VARCHAR(64) NOT NULL,
-    status VARCHAR(32) NOT NULL,
-    payload TEXT,
-    processed_at TIMESTAMPTZ,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-```
-
-### Kh? ??c nghi?p v? (Business Contract):
-1. `status` ch? nh?n hai gi? tr?: `'PENDING'` ho?c `'DONE'`.
-2. Khi `status = 'PENDING'`: job ch?a ho?n th?nh, do ?? `processed_at` **b?t bu?c ph?i l? `NULL`**.
-3. Khi `status = 'DONE'`: job ?? x? l? xong, do ?? `processed_at` **b?t bu?c ph?i c? gi? tr? (`NOT NULL`)**.
+**Học phần:** M2-E7A — CHECK/NULL, Flyway Forward Migration và DDL Rollback
+**Trạng thái học viên:** `[AWAITING_CANDIDATE]`
+**Mục tiêu bài tập:** Đánh giá năng lực thiết kế ràng buộc cơ sở dữ liệu với logic tam trị (3-valued logic), xây dựng kịch bản forward migration an toàn và xử lý sự cố khi dữ liệu cũ xung đột với quy định mới.
 
 ---
 
-## 2. Ph?n T? L?m 1: Vi?t R?ng Bu?c CHECK V? L?p Truth Table
+## 1. Bối Cảnh Bài Tập
 
-M?t k? s? junior tr??c ?? ?? vi?t r?ng bu?c nh? sau:
+Hệ thống thanh toán của AetherCore đang phát triển tính năng quản lý hoàn tiền (Refund). Bảng `market_refund` ghi nhận quy trình xử lý hoàn tiền với các yêu cầu nghiệp vụ sau:
 
+### Khế ước nghiệp vụ (Business Contract):
+1. Cột `state` nhận 1 trong 2 trạng thái: `'PENDING'` hoặc `'RESOLVED'`.
+2. Cột `resolution` nhận 1 trong 2 kết quả: `'APPROVED'` hoặc `'REJECTED'`.
+3. Cột `refund_transaction_id` (UUID) lưu mã giao dịch hoàn tiền từ cổng thanh toán bên thứ ba:
+   - Khi `state = 'PENDING'`: Yêu cầu đang duyệt, cả `resolution` và `refund_transaction_id` **bắt buộc phải là `NULL`**.
+   - Khi `state = 'RESOLVED'`:
+     - Nếu `resolution = 'APPROVED'`: Hoàn tiền thành công, `refund_transaction_id` **bắt buộc phải có giá trị** (`NOT NULL`).
+     - Nếu `resolution = 'REJECTED'`: Từ chối hoàn tiền, `refund_transaction_id` **bắt buộc phải là `NULL`**.
+     - Bất kỳ trường hợp `RESOLVED` nào mà `resolution` bị để trống (`NULL`) đều là **dữ liệu rác không hợp lệ**.
+
+---
+
+## 2. Phần Tự Làm 1: Viết Ràng Buộc CHECK Và Lập Truth Table
+
+### Câu hỏi 1.1:
+Dưới đây là một mệnh đề `CHECK` do một lập trình viên tập sự soạn thảo:
 ```sql
-ALTER TABLE telemetry_job ADD CONSTRAINT chk_telemetry_job_status_time CHECK (
-    (status = 'PENDING' AND processed_at IS NULL)
+CONSTRAINT chk_refund_shape CHECK (
+    (state = 'PENDING' AND resolution IS NULL AND refund_transaction_id IS NULL)
     OR
-    (status = 'DONE' AND processed_at IS NOT NULL)
-);
+    (state = 'RESOLVED' AND (
+        (resolution = 'APPROVED' AND refund_transaction_id IS NOT NULL)
+        OR
+        (resolution = 'REJECTED' AND refund_transaction_id IS NULL)
+    ))
+)
 ```
+Em hãy chỉ ra lỗ hổng của ràng buộc trên khi có dữ liệu `state = 'RESOLVED'`, `resolution = NULL`, `refund_transaction_id = NULL`. Phân tích chi tiết từng bước tính toán giá trị logic của PostgreSQL (`TRUE`, `FALSE`, `UNKNOWN`).
 
-### C?u h?i 1.1:
-Bi?u th?c tr?n c? b? l? h?ng ch?p nh?n d?ng sai kh?ng n?u m?t ai ?? `INSERT` ho?c `UPDATE` m?t d?ng c? `status = 'DONE'` v? `processed_at = NULL`? H?y ph?n t?ch theo c? ch? SQL 3-valued logic (TRUE, FALSE, UNKNOWN).
-
-*Tr? l?i c?a h?c vi?n:*
-[AWAITING_CANDIDATE]
+> **Trả lời của học viên:**
+> `[AWAITING_CANDIDATE]`
 
 ---
 
-### C?u h?i 1.2:
-H?y ho?n th?nh b?ng ch?n tr? (Truth Table) b?n d??i ?? ki?m tra to?n b? c?c kh? n?ng gi?a `status` v? `processed_at`:
+### Câu hỏi 1.2:
+Em hãy viết lại câu lệnh SQL định nghĩa ràng buộc `chk_refund_shape` đã được vá triệt để lỗ hổng trên, đảm bảo mọi trạng thái sai đều cho kết quả `FALSE` dứt khoát.
 
-| STT | status | processed_at | Mong mu?n nghi?p v? (ACCEPT/REJECT) | K?t qu? bi?u th?c CHECK (TRUE / FALSE / UNKNOWN) | PostgreSQL th?c t? (ACCEPT / REJECT) | Ghi ch? l? h?ng |
-|---|---|---|---|---|---|---|
-| 1 | `'PENDING'` | `NULL` | ACCEPT | [AWAITING_CANDIDATE] | [AWAITING_CANDIDATE] | H?p l? |
-| 2 | `'PENDING'` | `NOW()` | REJECT | [AWAITING_CANDIDATE] | [AWAITING_CANDIDATE] | |
-| 3 | `'DONE'` | `NOW()` | ACCEPT | [AWAITING_CANDIDATE] | [AWAITING_CANDIDATE] | H?p l? |
-| 4 | `'DONE'` | `NULL` | REJECT | [AWAITING_CANDIDATE] | [AWAITING_CANDIDATE] | |
-| 5 | `'FAILED'` | `NULL` | REJECT | [AWAITING_CANDIDATE] | [AWAITING_CANDIDATE] | Status l? |
-| 6 | `'FAILED'` | `NOW()` | REJECT | [AWAITING_CANDIDATE] | [AWAITING_CANDIDATE] | Status l? |
+> **Trả lời của học viên:**
+> `[AWAITING_CANDIDATE]`
 
 ---
 
-### C?u h?i 1.3:
-H?y vi?t l?i c?u l?nh SQL ??nh ngh?a r?ng bu?c `chk_telemetry_job_status_time` ho?n ch?nh nh?t ?? b?o ??m kh?ng c? b?t k? tr?ng th?i invalid n?o l?t qua ???c.
+### Câu hỏi 1.3:
+Lập bảng chân lý (Truth Table) gồm 8 tổ hợp đầu vào khả dĩ giữa `state`, `resolution`, và sự hiện diện của `refund_transaction_id` đối với ràng buộc đã sửa. Ghi rõ kết quả mong đợi (`ACCEPT` hay `REJECT`) và mã lỗi SQLSTATE tương ứng khi bị từ chối.
 
-*C?u l?nh SQL ?? xu?t:*
+> **Trả lời của học viên:**
+> `[AWAITING_CANDIDATE]`
+
+---
+
+## 3. Phần Tự Làm 2: Xử Lý Nâng Cấp Schema Trên Bảng Có Dữ Liệu Lỗi
+
+### Câu hỏi 2.1:
+Bảng `market_refund` trên môi trường Staging hiện đã có hàng triệu bản ghi, trong đó do lỗi code phiên bản cũ nên có khoảng 150 bản ghi mang trạng thái `state = 'RESOLVED'` nhưng `resolution` là `NULL`.
+Nếu em tạo file migration `V7__fix_refund_shape.sql` để áp dụng ràng buộc mới bằng câu lệnh:
 ```sql
--- [AWAITING_CANDIDATE]
+ALTER TABLE market_refund ADD CONSTRAINT chk_refund_shape CHECK (...);
 ```
+Điều gì sẽ xảy ra khi Flyway chạy migration này trên PostgreSQL? Database sẽ ở trạng thái nào? Flyway history sẽ ghi nhận ra sao?
+
+> **Trả lời của học viên:**
+> `[AWAITING_CANDIDATE]`
 
 ---
 
-## 3. Ph?n T? L?m 2: X? L? N?ng C?p Schema Tr?n B?ng C? D? Li?u L?i
+### Câu hỏi 2.2:
+Một đồng nghiệp đề xuất: *"Hãy viết thêm câu lệnh `DELETE FROM market_refund WHERE state = 'RESOLVED' AND resolution IS NULL;` vào đầu file migration V7 trước câu lệnh ADD CONSTRAINT để dọn dẹp cho sạch sẽ rồi migrate một thể."*
+Em có đồng ý với giải pháp này không? Tại sao? Đưa ra ít nhất 2 rủi ro nghiêm trọng về mặt tài chính và kiểm toán.
 
-Gi? s? b?ng `telemetry_job` tr?n production ?? t?n t?i h?n 1 tri?u d?ng v? ?ang c? 50 d?ng l?i `status = 'DONE'` nh?ng `processed_at IS NULL`.
-
-### C?u h?i 2.1:
-N?u b?n tr?c ti?p t?o file migration Flyway m?i `V2__enforce_telemetry_status_time.sql` ch?a c?u l?nh:
-```sql
-ALTER TABLE telemetry_job ADD CONSTRAINT chk_telemetry_job_status_time CHECK (...);
-```
-?i?u g? s? x?y ra khi deploy ?ng d?ng l?n production? PostgreSQL s? ph?n ?ng th? n?o? ?ng d?ng Spring Boot c? kh?i ??ng ???c kh?ng?
-
-*Tr? l?i c?a h?c vi?n:*
-[AWAITING_CANDIDATE]
+> **Trả lời của học viên:**
+> `[AWAITING_CANDIDATE]`
 
 ---
 
-### C?u h?i 2.2:
-T?i sao b?n **kh?ng ???c ph?p** s?a tr?c ti?p file migration `V1__create_telemetry_job.sql` ban ??u? H?y gi?i th?ch c? ch? validation c?a Flyway.
+### Câu hỏi 2.3:
+Hãy trình bày quy trình chuẩn 3 bước để khắc phục sự cố và triển khai thành công ràng buộc mới trên môi trường Production mà không làm mất mát dữ liệu và không gây downtime.
 
-*Tr? l?i c?a h?c vi?n:*
-[AWAITING_CANDIDATE]
-
----
-
-### C?u h?i 2.3:
-H?y ?? xu?t quy tr?nh n?ng c?p an to?n g?m c?c b??c c? th? (Pre-migration data cleanup / Data patch, Forward Migration, Validation) ?? deploy th?nh c?ng m? kh?ng g?y downtime hay crash ?ng d?ng.
-
-*Quy tr?nh ?? xu?t:*
-[AWAITING_CANDIDATE]
+> **Trả lời của học viên:**
+> `[AWAITING_CANDIDATE]`
 
 ---
 
-## 4. V?n ??p Ph?ng V?n (Oral Exam ? 60 ??n 90 Gi?y M?i C?u)
+## 4. Vấn Đáp Phỏng Vấn (Oral Exam — 60 Đến 90 Giây Mỗi Câu)
 
-### C?u 1: "T?i sao trong SQL, m?nh ?? WHERE th? l?c b? NULL, nh?ng CHECK constraint l?i v?n cho ph?p d?ng ch?a NULL ?i qua?"
-- **Th?i l??ng:** 60 - 90 gi?y
-- **Ti?u ch? ch?m (Rubric):** Ph?i n?u ???c logic 3 gi? tr? (Three-Valued Logic); `WHERE` ch? nh?n `TRUE` (filter out `FALSE` v? `UNKNOWN`); `CHECK` t? ch?i khi `FALSE` v? ch?p nh?n khi `TRUE` ho?c `UNKNOWN`.
-- *Ghi ch? ph?n x? c?a h?c vi?n:*
-[AWAITING_CANDIDATE]
+### Câu 1: "Tại sao trong SQL, mệnh đề WHERE thì lọc bỏ NULL, nhưng CHECK constraint lại vẫn cho phép dòng chứa NULL đi qua?"
+* **Gợi ý tiêu chuẩn chấm điểm (Rubric):**
+  - Trả lời đúng sự khác biệt cốt lõi: Mệnh đề `WHERE` tuân theo nguyên tắc "chỉ chấp nhận `TRUE`" (bỏ qua cả `FALSE` và `UNKNOWN`). Ngược lại, mệnh đề `CHECK` tuân theo nguyên tắc "chỉ từ chối khi khẳng định vi phạm chắc chắn là `FALSE`" (cho phép cả `TRUE` lẫn `UNKNOWN`).
+  - Nêu được ví dụ: Khi so sánh `col = 'ABC'` với `col` là NULL, kết quả là `UNKNOWN`. `WHERE` sẽ không lấy dòng đó; nhưng `CHECK` sẽ cho phép insert dòng đó vào bảng.
 
----
-
-### C?u 2: "T?i sao khi ph?t hi?n file migration V5 c? l?i constraint, em kh?ng s?a lu?n n?i dung file V5 r?i ch?y l?i cho s?ch s? m? l?i ph?i t?o file V6?"
-- **Th?i l??ng:** 60 - 90 gi?y
-- **Ti?u ch? ch?m (Rubric):** Gi?i th?ch ???c t?nh b?t bi?n c?a migration ?? commit/deploy; c? ch? ki?m tra SHA-256 checksum c?a Flyway (`flyway_schema_history`); ph?n bi?t gi?a m?i tr??ng dev c?c b? v? production database ?ang ch?a d? li?u th?t.
-- *Ghi ch? ph?n x? c?a h?c vi?n:*
-[AWAITING_CANDIDATE]
+> **Trả lời của học viên:**
+> `[AWAITING_CANDIDATE]`
 
 ---
 
-### C?u 3: "Sau khi m?t file migration Flyway b? fail gi?a ch?ng tr?n PostgreSQL, em s? query nh?ng th?ng tin g? t? database tr??c khi quy?t ??nh th? l?i?"
-- **Th?i l??ng:** 60 - 90 gi?y
-- **Ti?u ch? ch?m (Rubric):**
-  1. Ki?m tra transactional DDL c?a database: l?nh tr??c ?? (v? d? DROP CONSTRAINT) c? b? rollback kh?ng qua `pg_constraint`.
-  2. Ki?m tra `flyway_schema_history` xem c? d?ng migration b? ??nh d?u `success = false` hay transaction ?? rollback to?n b? kh?ng ghi nh?n.
-  3. Query b?ng nghi?p v? ?? t?m ch?nh x?c c?c d?ng vi ph?m d? li?u g?y ra l?i (v? d? t?m c?c d?ng `COMPLETED / null / null`).
-- *Ghi ch? ph?n x? c?a h?c vi?n:*
-[AWAITING_CANDIDATE]
+### Câu 2: "Tại sao khi phát hiện file migration V5 có lỗi constraint, em không sửa luôn nội dung file V5 rồi chạy lại cho sạch sẽ mà lại phải tạo file V6?"
+* **Gợi ý tiêu chuẩn chấm điểm (Rubric):**
+  - Nêu được nguyên tắc bất biến (Immutability) của migration: Khi đã commit và deploy lên môi trường chung, migration là lịch sử không thể thay đổi.
+  - Hiểu cơ chế hoạt động của Flyway: Flyway lưu giá trị checksum CRC32 của mỗi file script vào `flyway_schema_history`. Sửa file đã chạy sẽ làm sai lệch checksum, khiến `flyway validate` báo lỗi ném ngoại lệ và dừng ứng dụng ở lần khởi động sau.
+  - Phân kỳ môi trường (Environment Drift): Database cũ đã chạy V5 sẽ không bao giờ chạy lại file V5 đã sửa; database mới dựng lại chạy theo file mới. Hai môi trường sẽ mang cấu trúc schema khác nhau.
+
+> **Trả lời của học viên:**
+> `[AWAITING_CANDIDATE]`
+
+---
+
+### Câu 3: "Sau khi một file migration Flyway bị fail giữa chừng trên PostgreSQL, em sẽ query những thông tin gì từ database trước khi quyết định thử lại?"
+* **Gợi ý tiêu chuẩn chấm điểm (Rubric):**
+  - Query bảng `flyway_schema_history`: Kiểm tra xem migration lỗi có để lại dòng nào không, giá trị cột `success` là gì, version hiện tại là bao nhiêu. (Lưu ý: trên PostgreSQL có Transactional DDL, toàn bộ transaction bị rollback nên dòng failed thường bị xóa sạch).
+  - Query PostgreSQL system catalogs (`pg_constraint`, `pg_class`, `pg_tables`): Kiểm tra xem các bảng/ràng buộc đã tạo dở dang có còn tồn tại không.
+  - Query bảng dữ liệu nghiệp vụ: Tìm kiếm chính xác các dòng dữ liệu đang vi phạm ràng buộc mới để chuẩn bị kịch bản remediation.
+
+> **Trả lời của học viên:**
+> `[AWAITING_CANDIDATE]`

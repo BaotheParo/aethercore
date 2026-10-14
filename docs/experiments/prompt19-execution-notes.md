@@ -86,12 +86,12 @@ Triển khai trong `MarketIdempotencyIntegrationTest.java` trên Testcontainers 
 
 ---
 
-## 8. B? Sung ??nh Ch?nh T? Review Prompt 20 (Audit Findings)
+## 8. Bổ Sung Đính Chính Từ Review Prompt 20 (Audit Findings)
 
-1. **Chu?n h?a danh x?ng b?ng:** B?ng idempotency trong V5 t?n ch?nh x?c l? `market_idempotency`, b?ng ??n h?ng trong V3 t?n l? `market_purchase`. Kh?ng d?ng `_record` hay `_order`.
-2. **Kh? ??c Caller & Security:** `caller_id` l? input ??ng tin c?y ? t?ng giao ti?p application; h? th?ng ch?a c? l?p x?c th?c token / authorization.
-3. **Ph?n bi?t xung ??t d? li?u v? t?n c?ng:** Vi?c g?i sai payload v?i c?ng key l? xung ??t logic (`IdempotencyConflictException`), kh?ng v?i v?ng coi l? t?n c?ng an ninh m?ng.
-4. **Gi?i h?n b?m & nghi?p v?:** H?m b?m `request_fingerprint` kh?ng ??m b?o t?nh ??c nh?t tuy?t ??i v? m?t to?n h?c; service lu?n so s?nh ??i ch?ng c? SKU v? quantity.
-5. **C? ch? ?o l??ng Lock:** Trong k?ch b?n ID3, ph?p ?o th?c t? l? ki?m tra `workerAPid in pg_blocking_pids(workerBPid)`. Kh?ng t? suy ?o?n lock mode `ExclusiveLock` tr?n index tuple khi ch?a truy v?n catalog `pg_locks`.
-6. **K?ch ho?t rollback ID7:** Rollback ???c k?ch ho?t do n?m `RuntimeException` trong outer callback, kh?ng th?ng qua c? `setRollbackOnly()`.
-7. **L? h?ng CHECK V5:** X?c nh?n V5 thi?u `result_code IS NOT NULL` d?n t?i vi?c PostgreSQL ch?p nh?n b?n ghi `COMPLETED / null / null` do c? ch? 3-valued logic. V?n ?? ???c gi?i quy?t tri?t ?? t?i Prompt 20 qua migration V6.
+1. **Chuẩn hóa danh xưng bảng:** Bảng idempotency trong V5 tên chính xác là `market_idempotency`, bảng đơn hàng trong V3 tên là `market_purchase`. Không dùng `_record` hay `_order`.
+2. **Khái niệm Caller & Security:** `caller_id` là input đáng tin cậy ở tầng giao tiếp application; hệ thống chưa có lớp xác thực token / authorization.
+3. **Phân biệt xung đột dữ liệu và tấn công:** Việc gửi sai payload với cùng key là xung đột logic (`IdempotencyConflictException`), không vội vàng coi là tấn công an ninh mạng.
+4. **Giới hạn băm & nghiệp vụ:** Hàm băm `request_fingerprint` không đảm bảo tính độc nhất tuyệt đối về mặt toán học; service luôn so sánh đối chứng cả SKU và quantity.
+5. **Cơ chế đo lường Lock:** Trong kịch bản ID3, phép đo thực tế là kiểm tra `workerAPid in pg_blocking_pids(workerBPid)` với `lock_timeout = '10s'`, `statement_timeout = '15s'`. Không tự suy đoán lock mode `ExclusiveLock` trên index tuple khi chưa truy vấn catalog `pg_locks`.
+6. **Kích hoạt rollback ID7:** Rollback được kích hoạt do ném `RuntimeException` trong outer callback, không thông qua cờ `setRollbackOnly()`.
+7. **Lỗ hổng CHECK V5:** Xác nhận V5 thiếu `result_code IS NOT NULL` dẫn tới việc PostgreSQL chấp nhận bản ghi `COMPLETED / null / null` do cơ chế 3-valued logic. Vấn đề được giải quyết triệt để tại Prompt 20 qua migration V6.

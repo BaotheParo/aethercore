@@ -1385,5 +1385,208 @@ class TestEvidenceCollector(unittest.TestCase):
             )
         self.assertIn("Required caseId 'MG1' not found", str(cm.exception))
 
+        # 8. MG2 duplicate truth table variant raises
+        c_dup = copy.deepcopy(valid_mig_payload)
+        # Duplicate row 0 into row 1
+        c_dup["scenarios"][1]["observed"]["truthTable"][1] = copy.deepcopy(c_dup["scenarios"][1]["observed"]["truthTable"][0])
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c_dup, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-mig-1",
+                required_sets={"migration-observations.json": ["MG1", "MG2", "MG3"]}
+            )
+        self.assertIn("duplicate variant", str(cm.exception))
+
+
+    def test_nontransactional_index_observations_validation(self):
+        obs_dir = os.path.join(self.temp_dir, "ad-hoc-nc")
+        os.makedirs(obs_dir, exist_ok=True)
+        file_path = os.path.join(obs_dir, "nontransactional-index-observations.json")
+
+        valid_nc_payload = {
+            "schemaVersion": "1.0.0",
+            "runId": "run-nc-1",
+            "timestamp": "2026-10-14T03:00:00Z",
+            "database": {"serverVersion": "16.15"},
+            "flyway": {"version": "10.10.0"},
+            "scenarios": [
+                {
+                    "caseId": "NC1",
+                    "description": "CIC rejected in transaction block",
+                    "assertionsPassed": True,
+                    "expected": {"sqlState": "25001", "indexExistsAfterRollback": False, "rowsPreserved": True},
+                    "observed": {
+                        "sqlState": "25001",
+                        "errorMessage": "cannot run inside a transaction block",
+                        "autoCommitMode": False,
+                        "indexCatalogAfterRollback": {"exists": False},
+                        "indexExistsAfterRollback": False,
+                        "rowsAfterRollback": [{"id": 1, "token": "IRON"}, {"id": 2, "token": "IRON"}, {"id": 3, "token": "GOLD"}],
+                        "rowsPreserved": True
+                    }
+                },
+                {
+                    "caseId": "NC2",
+                    "description": "Build fail leaves INVALID index",
+                    "assertionsPassed": True,
+                    "expected": {"migrationFailureSqlState": "23505", "indexExists": True, "indisunique": True, "indisvalid": False},
+                    "observed": {
+                        "migrationFailureSqlState": "23505",
+                        "indexCatalog": {"exists": True, "indexOid": 12345, "indisunique": True, "indisvalid": False, "indisready": False, "indislive": True},
+                        "indexExists": True,
+                        "indisunique": True,
+                        "indisvalid": False,
+                        "historyRows": [{"version": "1", "success": True}, {"version": "2", "success": False}],
+                        "v2HistorySuccess": False,
+                        "rowsAfter": [{"id": 1, "token": "IRON"}, {"id": 2, "token": "IRON"}, {"id": 3, "token": "GOLD"}],
+                        "rowsPreserved": True,
+                        "duplicateGroups": [{"token": "IRON", "count": 2}],
+                        "validationFailed": True
+                    }
+                },
+                {
+                    "caseId": "NC3",
+                    "description": "Repair does not fix index; recovery cleanup and retry",
+                    "assertionsPassed": True,
+                    "expected": {"repairRemovesFailedHistory": True, "finalIndexValid": True},
+                    "observed": {
+                        "fileHashesUnchanged": True,
+                        "checkpoint1_beforeRepair": {
+                            "indexCatalog": {"exists": True, "indisvalid": False},
+                            "history": [{"version": "1", "success": True}, {"version": "2", "success": False}],
+                            "rows": [{"id": 1, "token": "IRON"}, {"id": 2, "token": "IRON"}, {"id": 3, "token": "GOLD"}],
+                            "duplicateGroups": [{"token": "IRON", "count": 2}]
+                        },
+                        "checkpoint2_afterRepair": {
+                            "indexCatalog": {"exists": True, "indisvalid": False},
+                            "history": [{"version": "1", "success": True}],
+                            "rows": [{"id": 1, "token": "IRON"}, {"id": 2, "token": "IRON"}, {"id": 3, "token": "GOLD"}],
+                            "duplicateGroups": [{"token": "IRON", "count": 2}]
+                        },
+                        "checkpoint3_afterCleanup": {
+                            "indexCatalog": {"exists": False},
+                            "rows": [{"id": 1, "token": "IRON"}, {"id": 2, "token": "SILVER"}, {"id": 3, "token": "GOLD"}],
+                            "duplicateGroups": []
+                        },
+                        "checkpoint4_afterRetry": {
+                            "retrySuccess": True,
+                            "indexCatalog": {"exists": True, "indisvalid": True, "indisunique": True},
+                            "history": [{"version": "1", "success": True}, {"version": "2", "success": True}],
+                            "duplicateInsertSqlState": "23505",
+                            "repeatMigrationCount": 0,
+                            "validationPassed": True
+                        }
+                    }
+                }
+            ]
+        }
+
+        # 1. Valid payload passes
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(valid_nc_payload, f)
+        validated = self.collector.validate_observations(
+            obs_dir, run_id="run-nc-1",
+            required_sets={"nontransactional-index-observations.json": ["NC1", "NC2", "NC3"]}
+        )
+        self.assertEqual(validated, ["nontransactional-index-observations.json"])
+
+        # 2. NC1 sqlState mutated to 23505 raises
+        c1 = copy.deepcopy(valid_nc_payload)
+        c1["scenarios"][0]["observed"]["sqlState"] = "23505"
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c1, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-nc-1",
+                required_sets={"nontransactional-index-observations.json": ["NC1", "NC2", "NC3"]}
+            )
+        self.assertIn("Scenario NC1 sqlState must be '25001'", str(cm.exception))
+
+        # 3. NC1 index exists after rollback raises
+        c2 = copy.deepcopy(valid_nc_payload)
+        c2["scenarios"][0]["observed"]["indexExistsAfterRollback"] = True
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c2, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-nc-1",
+                required_sets={"nontransactional-index-observations.json": ["NC1", "NC2", "NC3"]}
+            )
+        self.assertIn("Scenario NC1 indexExistsAfterRollback must be False", str(cm.exception))
+
+        # 4. NC2 indisvalid=True raises
+        c3 = copy.deepcopy(valid_nc_payload)
+        c3["scenarios"][1]["observed"]["indisvalid"] = True
+        c3["scenarios"][1]["observed"]["indexCatalog"]["indisvalid"] = True
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c3, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-nc-1",
+                required_sets={"nontransactional-index-observations.json": ["NC1", "NC2", "NC3"]}
+            )
+        self.assertIn("indisvalid must be False (INVALID index)", str(cm.exception))
+
+        # 5. NC2 v2HistorySuccess=True raises
+        c4 = copy.deepcopy(valid_nc_payload)
+        c4["scenarios"][1]["observed"]["v2HistorySuccess"] = True
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c4, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-nc-1",
+                required_sets={"nontransactional-index-observations.json": ["NC1", "NC2", "NC3"]}
+            )
+        self.assertIn("Scenario NC2 v2HistorySuccess must be False", str(cm.exception))
+
+        # 6. NC3 after repair index becomes valid raises
+        c5 = copy.deepcopy(valid_nc_payload)
+        c5["scenarios"][2]["observed"]["checkpoint2_afterRepair"]["indexCatalog"]["indisvalid"] = True
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c5, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-nc-1",
+                required_sets={"nontransactional-index-observations.json": ["NC1", "NC2", "NC3"]}
+            )
+        self.assertIn("must remain INVALID after repair", str(cm.exception))
+
+        # 7. NC3 retry file hashes changed raises
+        c6 = copy.deepcopy(valid_nc_payload)
+        c6["scenarios"][2]["observed"]["fileHashesUnchanged"] = False
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c6, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-nc-1",
+                required_sets={"nontransactional-index-observations.json": ["NC1", "NC2", "NC3"]}
+            )
+        self.assertIn("Scenario NC3 fileHashesUnchanged must be True", str(cm.exception))
+
+        # 8. NC3 checkpoint4 duplicate insert not rejected raises
+        c7 = copy.deepcopy(valid_nc_payload)
+        c7["scenarios"][2]["observed"]["checkpoint4_afterRetry"]["duplicateInsertSqlState"] = "00000"
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c7, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-nc-1",
+                required_sets={"nontransactional-index-observations.json": ["NC1", "NC2", "NC3"]}
+            )
+        self.assertIn("duplicate insert must be rejected with SQLSTATE 23505", str(cm.exception))
+
+        # 9. Missing caseId NC2 raises
+        c8 = copy.deepcopy(valid_nc_payload)
+        c8["scenarios"].pop(1)
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c8, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-nc-1",
+                required_sets={"nontransactional-index-observations.json": ["NC1", "NC2", "NC3"]}
+            )
+        self.assertIn("Required caseId 'NC2' not found", str(cm.exception))
+
 if __name__ == '__main__':
     unittest.main()

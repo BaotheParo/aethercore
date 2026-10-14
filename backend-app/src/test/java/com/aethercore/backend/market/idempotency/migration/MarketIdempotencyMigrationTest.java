@@ -125,7 +125,7 @@ public class MarketIdempotencyMigrationTest {
                 row.put("description", rs.getString("description"));
                 row.put("type", rs.getString("type"));
                 row.put("script", rs.getString("script"));
-                row.put("checksum", rs.getInt("checksum"));
+                row.put("checksum", rs.getObject("checksum") != null ? ((Number) rs.getObject("checksum")).intValue() : null);
                 row.put("success", rs.getBoolean("success"));
                 list.add(row);
             }
@@ -308,6 +308,8 @@ public class MarketIdempotencyMigrationTest {
                     "v6ConstraintDef", v6ConstraintDef,
                     "v6Validated", true,
                     "validDataPreserved", true,
+                    "historyBefore", v5History,
+                    "historyAfter", v6History,
                     "historyCount", finalHistory.size(),
                     "repeatMigrationCount", resV6Repeat.migrationsExecuted
             ));
@@ -390,6 +392,7 @@ public class MarketIdempotencyMigrationTest {
                 }
 
                 Map<String, Object> r = new LinkedHashMap<>();
+                r.put("inputVariant", tv.state + "|" + (tv.resultCode == null ? "NULL" : tv.resultCode) + "|" + tv.withPurchase);
                 r.put("state", tv.state);
                 r.put("resultCode", tv.resultCode);
                 r.put("withPurchase", tv.withPurchase);
@@ -501,6 +504,10 @@ public class MarketIdempotencyMigrationTest {
                 ps.executeUpdate();
             }
 
+            // Capture snapshots before failed migration
+            Map<String, String> rowsBefore = queryIdempotencySummary(conn, schema);
+            List<Map<String, Object>> historyBefore = getFlywayHistory(conn, schema);
+
             // 3. Attempt V6 migration: must fail due to malformed data
             Flyway flywayV6 = createFlyway(schema, "6");
             String migrationFailureSqlState = null;
@@ -525,19 +532,35 @@ public class MarketIdempotencyMigrationTest {
                 assertNotNull(restoredDef, "Old constraint must still exist after rollback");
                 assertEquals(v5ConstraintDef, restoredDef, "Constraint definition must match V5 definition");
 
-                // Rows are preserved
+                // Rows are preserved and identical before and after failure
+                Map<String, String> rowsAfter = queryIdempotencySummary(connCheck, schema);
+                assertEquals(rowsBefore, rowsAfter, "Row contents before and after failed migration must be identical");
                 try (Statement s = connCheck.createStatement();
                      ResultSet rs = s.executeQuery("SELECT COUNT(*) FROM " + schema + ".market_idempotency")) {
                     assertTrue(rs.next());
                     assertEquals(2, rs.getInt(1), "Both malformed and valid rows must still exist");
                 }
 
-                // History table has V1..V5, and NO version 6 row (neither applied nor failed)
+                // History table has V1..V5, identical to historyBefore
                 List<Map<String, Object>> histAfterFail = getFlywayHistory(connCheck, schema);
+                assertEquals(historyBefore, histAfterFail, "History before and after failed migration must match exactly");
                 assertEquals(5, histAfterFail.size(), "History must not contain V6");
                 for (Map<String, Object> h : histAfterFail) {
                     assertNotEquals("6", h.get("version"));
                 }
+
+                // Verify V5 constraint is still active by attempting insert violating V5 shape
+                SQLException v5ViolEx = assertThrows(SQLException.class, () -> {
+                    try (PreparedStatement ps = connCheck.prepareStatement(
+                            "INSERT INTO " + schema + ".market_idempotency (caller_id, operation, idempotency_key, request_sku, request_quantity, request_fingerprint, state, result_code, purchase_id) " +
+                            "VALUES (?, 'PURCHASE_V1', ?, 'POTION_3', 1, 'fp_v5_viol', 'COMPLETED', 'SUCCESS', NULL)")) {
+                        ps.setObject(1, UUID.randomUUID());
+                        ps.setObject(2, UUID.randomUUID());
+                        ps.executeUpdate();
+                    }
+                });
+                assertEquals("23514", v5ViolEx.getSQLState(), "V5 constraint violation must yield SQLSTATE 23514");
+                assertTrue(v5ViolEx.getMessage().contains("chk_idempotency_state_shape"), "V5 error message must reference chk_idempotency_state_shape");
 
                 // 5. Delete exactly the malformed row in lab schema
                 int deletedRows;
@@ -593,15 +616,21 @@ public class MarketIdempotencyMigrationTest {
                 obs.put("description", "Migration fail due to legacy malformed data, DDL rollback, and clean retry");
                 obs.put("schema", schema);
                 obs.put("expected", Map.of("migrationFailureSqlState", "23514", "oldConstraintRestored", true, "v6HistoryCountAfterFailure", 0, "retrySuccess", true));
-                obs.put("observed", Map.of(
-                        "migrationFailureSqlState", migrationFailureSqlState,
-                        "oldConstraintRestored", true,
-                        "v6HistoryCountAfterFailure", 0,
-                        "v6FileHashUnchanged", true,
-                        "v6FileHash", v6FileHashAfter,
-                        "retrySuccess", retryRes.success,
-                        "finalHistoryCount", finalHist.size()
-                ));
+                Map<String, Object> mg3Observed = new LinkedHashMap<>();
+                mg3Observed.put("migrationFailureSqlState", migrationFailureSqlState);
+                mg3Observed.put("oldConstraintRestored", true);
+                mg3Observed.put("v5ConstraintDef", v5ConstraintDef);
+                mg3Observed.put("restoredConstraintDef", restoredDef);
+                mg3Observed.put("v6HistoryCountAfterFailure", 0);
+                mg3Observed.put("historyBefore", historyBefore);
+                mg3Observed.put("historyAfter", histAfterFail);
+                mg3Observed.put("rowsBefore", rowsBefore);
+                mg3Observed.put("rowsAfter", rowsAfter);
+                mg3Observed.put("v6FileHashUnchanged", true);
+                mg3Observed.put("v6FileHash", v6FileHashAfter);
+                mg3Observed.put("retrySuccess", retryRes.success);
+                mg3Observed.put("finalHistoryCount", finalHist.size());
+                obs.put("observed", mg3Observed);
                 obs.put("assertionsPassed", true);
                 observations.put("MG3", obs);
             }
