@@ -1000,5 +1000,390 @@ class TestEvidenceCollector(unittest.TestCase):
         self.assertIn("stock conservation violated", str(cm.exception))
 
 
+
+    def test_idempotency_validator_reviewer_loopholes(self):
+        obs_dir = os.path.join(self.temp_dir, "idempotency_loopholes_test")
+        os.makedirs(obs_dir, exist_ok=True)
+        file_path = os.path.join(obs_dir, "idempotency-observations.json")
+
+        base_valid_payload = {
+            "schemaVersion": "1.0.0",
+            "runId": "run-idem-lh",
+            "timestamp": "2026-10-14T10:00:00Z",
+            "scenarios": [
+                {
+                    "caseId": "ID1",
+                    "description": "Sequential replay",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "stock": 3,
+                        "purchaseCount": 1,
+                        "purchaseId1": "p-1",
+                        "purchaseId2": "p-1",
+                        "replayed1": False,
+                        "replayed2": True,
+                        "storedState": "COMPLETED",
+                        "resultCode": "SUCCESS"
+                    }
+                },
+                {
+                    "caseId": "ID2",
+                    "description": "Key reuse",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "exQtyThrown": "IdempotencyConflictException",
+                        "exSkuThrown": "IdempotencyConflictException",
+                        "finalStock": 4,
+                        "purchaseCount": 1,
+                        "storedRowUnchanged": True,
+                        "invalidKeyCount": 0
+                    }
+                },
+                {
+                    "caseId": "ID3",
+                    "description": "Concurrent lock wait",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "workerAPid": 101,
+                        "workerBPid": 102,
+                        "observedBlocking": True,
+                        "blockingPidList": [101],
+                        "purchaseIdA": "p-3",
+                        "purchaseIdB": "p-3",
+                        "replayedA": False,
+                        "replayedB": True,
+                        "finalStock": 3,
+                        "purchaseCount": 1
+                    }
+                },
+                {
+                    "caseId": "ID4",
+                    "description": "Scope isolation",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "stock": 7,
+                        "purchaseCount": 3,
+                        "pId1": "p-4a",
+                        "pId2": "p-4b",
+                        "pId3": "p-4c",
+                        "replayed1": False,
+                        "replayed2": False,
+                        "replayed3": False
+                    }
+                },
+                {
+                    "caseId": "ID5",
+                    "description": "SQL error rollback",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "observedSqlState": "23514",
+                        "stockAfterRollback": 5,
+                        "stockAfterRetry": 3,
+                        "purchaseCountAfterRollback": 0,
+                        "idempotencyCountAfterRollback": 0,
+                        "purchaseCountAfterRetry": 1,
+                        "idempotencyCountAfterRetry": 1
+                    }
+                },
+                {
+                    "caseId": "ID6",
+                    "description": "Replay NOT_AVAILABLE after restock",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "replayResult": "NOT_AVAILABLE",
+                        "replayFlag": True,
+                        "newKeyResult": "SUCCESS",
+                        "finalStock": 3,
+                        "totalSold": 2,
+                        "idempotencyCount": 2
+                    }
+                },
+                {
+                    "caseId": "ID7",
+                    "description": "Outer tx rollback",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "stockAfterRollback": 5,
+                        "stockAfterRetry": 3,
+                        "purchaseCountAfterRollback": 0,
+                        "idempotencyCountAfterRollback": 0,
+                        "purchaseCountAfterRetry": 1,
+                        "idempotencyCountAfterRetry": 1
+                    }
+                }
+            ]
+        }
+
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(base_valid_payload, f)
+        self.collector.validate_observations(
+            obs_dir, run_id="run-idem-lh",
+            required_sets={"idempotency-observations.json": [f"ID{i}" for i in range(1, 8)]}
+        )
+
+        # Loophole 1: ID1 stock = -99
+        c1 = copy.deepcopy(base_valid_payload)
+        c1["scenarios"][0]["observed"]["stock"] = -99
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c1, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-idem-lh",
+                required_sets={"idempotency-observations.json": [f"ID{i}" for i in range(1, 8)]}
+            )
+        self.assertIn("ID1 stock must be integer 3", str(cm.exception))
+
+        # Loophole 2: ID3 blockingPidList = []
+        c2 = copy.deepcopy(base_valid_payload)
+        c2["scenarios"][2]["observed"]["blockingPidList"] = []
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c2, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-idem-lh",
+                required_sets={"idempotency-observations.json": [f"ID{i}" for i in range(1, 8)]}
+            )
+        self.assertIn("blockingPidList must be a non-empty list", str(cm.exception))
+
+        # Loophole 3: ID3 workerBPid = workerAPid
+        c3 = copy.deepcopy(base_valid_payload)
+        c3["scenarios"][2]["observed"]["workerBPid"] = c3["scenarios"][2]["observed"]["workerAPid"]
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c3, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-idem-lh",
+                required_sets={"idempotency-observations.json": [f"ID{i}" for i in range(1, 8)]}
+            )
+        self.assertIn("workerAPid and workerBPid must be distinct", str(cm.exception))
+
+        # Loophole 4: ID7 purchaseCountAfterRetry = 99
+        c4 = copy.deepcopy(base_valid_payload)
+        c4["scenarios"][6]["observed"]["purchaseCountAfterRetry"] = 99
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c4, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-idem-lh",
+                required_sets={"idempotency-observations.json": [f"ID{i}" for i in range(1, 8)]}
+            )
+        self.assertIn("purchaseCountAfterRetry must be integer 1", str(cm.exception))
+
+    def test_idempotency_rollback_claim_remaining(self):
+        obs_dir = os.path.join(self.temp_dir, "idempotency_claim_test")
+        os.makedirs(obs_dir, exist_ok=True)
+        file_path = os.path.join(obs_dir, "idempotency-observations.json")
+
+        base_valid_payload = {
+            "schemaVersion": "1.0.0",
+            "runId": "run-idem-claim",
+            "timestamp": "2026-10-14T10:00:00Z",
+            "scenarios": [
+                {
+                    "caseId": f"ID{i}",
+                    "description": f"desc {i}",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "stock": 3,
+                        "purchaseCount": 1,
+                        "purchaseId1": "p-1",
+                        "purchaseId2": "p-1",
+                        "replayed1": False,
+                        "replayed2": True
+                    } if i == 1 else (
+                        {"exQtyThrown": "IdempotencyConflictException", "exSkuThrown": "IdempotencyConflictException", "finalStock": 4, "purchaseCount": 1} if i == 2 else (
+                        {"workerAPid": 101, "workerBPid": 102, "observedBlocking": True, "blockingPidList": [101], "purchaseIdA": "p", "purchaseIdB": "p"} if i == 3 else (
+                        {"stock": 7, "purchaseCount": 3, "pId1": "a", "pId2": "b", "pId3": "c"} if i == 4 else (
+                        {"observedSqlState": "23514", "stockAfterRollback": 5, "stockAfterRetry": 3, "purchaseCountAfterRetry": 1, "purchaseCountAfterRollback": 0, "idempotencyCountAfterRollback": 0} if i == 5 else (
+                        {"replayResult": "NOT_AVAILABLE", "replayFlag": True, "newKeyResult": "SUCCESS", "finalStock": 3, "totalSold": 2} if i == 6 else
+                        {"stockAfterRollback": 5, "stockAfterRetry": 3, "purchaseCountAfterRetry": 1, "purchaseCountAfterRollback": 0, "idempotencyCountAfterRollback": 0}
+                    )))))
+                }
+                for i in range(1, 8)
+            ]
+        }
+
+        # ID5 with claim remaining after rollback raises
+        c5 = copy.deepcopy(base_valid_payload)
+        c5["scenarios"][4]["observed"]["idempotencyCountAfterRollback"] = 1
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c5, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-idem-claim",
+                required_sets={"idempotency-observations.json": [f"ID{i}" for i in range(1, 8)]}
+            )
+        self.assertIn("idempotencyCountAfterRollback must be integer 0", str(cm.exception))
+
+        # ID7 with purchase remaining after rollback raises
+        c7 = copy.deepcopy(base_valid_payload)
+        c7["scenarios"][6]["observed"]["purchaseCountAfterRollback"] = 1
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c7, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-idem-claim",
+                required_sets={"idempotency-observations.json": [f"ID{i}" for i in range(1, 8)]}
+            )
+        self.assertIn("purchaseCountAfterRollback must be integer 0", str(cm.exception))
+
+    def test_migration_observations_validation(self):
+        obs_dir = os.path.join(self.temp_dir, "migration_test")
+        os.makedirs(obs_dir, exist_ok=True)
+        file_path = os.path.join(obs_dir, "migration-observations.json")
+
+        valid_mig_payload = {
+            "schemaVersion": "1.0.0",
+            "runId": "run-mig-1",
+            "timestamp": "2026-10-14T10:00:00Z",
+            "database": {
+                "image": "postgres:16-alpine",
+                "serverVersion": "16.15",
+                "databaseName": "aethercore_migration_test",
+                "isolationDefault": "read committed"
+            },
+            "scenarios": [
+                {
+                    "caseId": "MG1",
+                    "description": "Upgrade with legacy data",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "v5MalformedAccepted": True,
+                        "validDataPreserved": True,
+                        "v6Success": True,
+                        "v6Validated": True,
+                        "repeatMigrationCount": 0,
+                        "historyCount": 6,
+                        "v5ConstraintDef": "CHECK (state = 'PROCESSING' OR state = 'COMPLETED')",
+                        "v6ConstraintDef": "CHECK (state = 'PROCESSING' OR (state = 'COMPLETED' AND result_code IS NOT NULL))"
+                    }
+                },
+                {
+                    "caseId": "MG2",
+                    "description": "Truth table and UPDATE rejection",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "truthTable": [
+                            {"state": "PROCESSING", "resultCode": None, "withPurchase": False, "expected": "ACCEPT", "actual": "ACCEPT", "sqlState": None},
+                            {"state": "COMPLETED", "resultCode": "NOT_AVAILABLE", "withPurchase": False, "expected": "ACCEPT", "actual": "ACCEPT", "sqlState": None},
+                            {"state": "COMPLETED", "resultCode": "SUCCESS", "withPurchase": True, "expected": "ACCEPT", "actual": "ACCEPT", "sqlState": None},
+                            {"state": "COMPLETED", "resultCode": None, "withPurchase": False, "expected": "REJECT", "actual": "REJECT", "sqlState": "23514"},
+                            {"state": "COMPLETED", "resultCode": None, "withPurchase": True, "expected": "REJECT", "actual": "REJECT", "sqlState": "23514"},
+                            {"state": "COMPLETED", "resultCode": "SUCCESS", "withPurchase": False, "expected": "REJECT", "actual": "REJECT", "sqlState": "23514"},
+                            {"state": "COMPLETED", "resultCode": "NOT_AVAILABLE", "withPurchase": True, "expected": "REJECT", "actual": "REJECT", "sqlState": "23514"},
+                            {"state": "PROCESSING", "resultCode": "SUCCESS", "withPurchase": True, "expected": "REJECT", "actual": "REJECT", "sqlState": "23514"}
+                        ],
+                        "updateRejected": True,
+                        "updateSqlState": "23514",
+                        "rowIntactAfterUpdateFailure": True
+                    }
+                },
+                {
+                    "caseId": "MG3",
+                    "description": "Migration failure and DDL rollback",
+                    "assertionsPassed": True,
+                    "expected": {},
+                    "observed": {
+                        "migrationFailureSqlState": "23514",
+                        "oldConstraintRestored": True,
+                        "v6HistoryCountAfterFailure": 0,
+                        "v6FileHash": "hash123",
+                        "v6FileHashUnchanged": True,
+                        "retrySuccess": True,
+                        "finalHistoryCount": 6
+                    }
+                }
+            ]
+        }
+
+        # 1. Valid migration payload passes
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(valid_mig_payload, f)
+        validated = self.collector.validate_observations(
+            obs_dir, run_id="run-mig-1",
+            required_sets={"migration-observations.json": ["MG1", "MG2", "MG3"]}
+        )
+        self.assertEqual(validated, ["migration-observations.json"])
+
+        # 2. MG1 repeatMigrationCount > 0 raises
+        c1 = copy.deepcopy(valid_mig_payload)
+        c1["scenarios"][0]["observed"]["repeatMigrationCount"] = 1
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c1, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-mig-1",
+                required_sets={"migration-observations.json": ["MG1", "MG2", "MG3"]}
+            )
+        self.assertIn("repeatMigrationCount must be integer 0", str(cm.exception))
+
+        # 3. MG2 accepting malformed COMPLETED/null raises
+        c2 = copy.deepcopy(valid_mig_payload)
+        c2["scenarios"][1]["observed"]["truthTable"][3]["actual"] = "ACCEPT"
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c2, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-mig-1",
+                required_sets={"migration-observations.json": ["MG1", "MG2", "MG3"]}
+            )
+        self.assertIn("Scenario MG2 truthTable mismatch", str(cm.exception))
+
+        # 4. MG3 recording V6 success after failure raises
+        c3 = copy.deepcopy(valid_mig_payload)
+        c3["scenarios"][2]["observed"]["v6HistoryCountAfterFailure"] = 1
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c3, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-mig-1",
+                required_sets={"migration-observations.json": ["MG1", "MG2", "MG3"]}
+            )
+        self.assertIn("v6HistoryCountAfterFailure must be integer 0", str(cm.exception))
+
+        # 5. MG3 retry changed file hash raises
+        c4 = copy.deepcopy(valid_mig_payload)
+        c4["scenarios"][2]["observed"]["v6FileHashUnchanged"] = False
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c4, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-mig-1",
+                required_sets={"migration-observations.json": ["MG1", "MG2", "MG3"]}
+            )
+        self.assertIn("v6FileHashUnchanged must be True", str(cm.exception))
+
+        # 6. Mismatched runId raises
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(valid_mig_payload, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="different-run-id",
+                required_sets={"migration-observations.json": ["MG1", "MG2", "MG3"]}
+            )
+        self.assertIn("Mismatched runId", str(cm.exception))
+
+        # 7. Missing caseId raises
+        c5 = copy.deepcopy(valid_mig_payload)
+        c5["scenarios"].pop(0)
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c5, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-mig-1",
+                required_sets={"migration-observations.json": ["MG1", "MG2", "MG3"]}
+            )
+        self.assertIn("Required caseId 'MG1' not found", str(cm.exception))
+
 if __name__ == '__main__':
     unittest.main()

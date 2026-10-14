@@ -1,0 +1,125 @@
+{
+  "schemaVersion" : "1.0.0",
+  "runId" : "prompt20-20261014-095203-b9fd81",
+  "timestamp" : "2026-10-14T02:52:37.355654700Z",
+  "database" : {
+    "image" : "postgres:16-alpine",
+    "serverVersion" : "16.15",
+    "databaseName" : "aethercore_migration_test",
+    "isolationDefault" : "read committed"
+  },
+  "scenarios" : [ {
+    "caseId" : "MG1",
+    "description" : "Recreate V5 flaw and upgrade to V6 with valid data preserved",
+    "schema" : "mg1_schema",
+    "expected" : {
+      "v6Success" : true,
+      "v5MalformedAccepted" : true,
+      "validDataPreserved" : true,
+      "repeatMigrationCount" : 0
+    },
+    "observed" : {
+      "v5ConstraintDef" : "CHECK (((((state)::text = 'PROCESSING'::text) AND (result_code IS NULL) AND (purchase_id IS NULL)) OR (((state)::text = 'COMPLETED'::text) AND ((((result_code)::text = 'SUCCESS'::text) AND (purchase_id IS NOT NULL)) OR (((result_code)::text = 'NOT_AVAILABLE'::text) AND (purchase_id IS NULL))))))",
+      "v6ConstraintDef" : "CHECK (((((state)::text = 'PROCESSING'::text) AND (result_code IS NULL) AND (purchase_id IS NULL)) OR (((state)::text = 'COMPLETED'::text) AND (result_code IS NOT NULL) AND ((((result_code)::text = 'SUCCESS'::text) AND (purchase_id IS NOT NULL)) OR (((result_code)::text = 'NOT_AVAILABLE'::text) AND (purchase_id IS NULL))))))",
+      "v6Success" : true,
+      "v5MalformedAccepted" : true,
+      "validDataPreserved" : true,
+      "v6Validated" : true,
+      "repeatMigrationCount" : 0,
+      "historyCount" : 6
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "MG2",
+    "description" : "Truth table shape validation after V6 and UPDATE rejection",
+    "schema" : "mg2_schema",
+    "expected" : {
+      "updateRejected" : true,
+      "allVariantsMatch" : true,
+      "updateSqlState" : "23514"
+    },
+    "observed" : {
+      "updateSqlState" : "23514",
+      "truthTable" : [ {
+        "state" : "PROCESSING",
+        "resultCode" : null,
+        "withPurchase" : false,
+        "expected" : "ACCEPT",
+        "actual" : "ACCEPT",
+        "sqlState" : null
+      }, {
+        "state" : "COMPLETED",
+        "resultCode" : "NOT_AVAILABLE",
+        "withPurchase" : false,
+        "expected" : "ACCEPT",
+        "actual" : "ACCEPT",
+        "sqlState" : null
+      }, {
+        "state" : "COMPLETED",
+        "resultCode" : "SUCCESS",
+        "withPurchase" : true,
+        "expected" : "ACCEPT",
+        "actual" : "ACCEPT",
+        "sqlState" : null
+      }, {
+        "state" : "COMPLETED",
+        "resultCode" : null,
+        "withPurchase" : false,
+        "expected" : "REJECT",
+        "actual" : "REJECT",
+        "sqlState" : "23514"
+      }, {
+        "state" : "COMPLETED",
+        "resultCode" : null,
+        "withPurchase" : true,
+        "expected" : "REJECT",
+        "actual" : "REJECT",
+        "sqlState" : "23514"
+      }, {
+        "state" : "COMPLETED",
+        "resultCode" : "SUCCESS",
+        "withPurchase" : false,
+        "expected" : "REJECT",
+        "actual" : "REJECT",
+        "sqlState" : "23514"
+      }, {
+        "state" : "COMPLETED",
+        "resultCode" : "NOT_AVAILABLE",
+        "withPurchase" : true,
+        "expected" : "REJECT",
+        "actual" : "REJECT",
+        "sqlState" : "23514"
+      }, {
+        "state" : "PROCESSING",
+        "resultCode" : "SUCCESS",
+        "withPurchase" : true,
+        "expected" : "REJECT",
+        "actual" : "REJECT",
+        "sqlState" : "23514"
+      } ],
+      "rowIntactAfterUpdateFailure" : true,
+      "updateRejected" : true
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "MG3",
+    "description" : "Migration fail due to legacy malformed data, DDL rollback, and clean retry",
+    "schema" : "mg3_schema",
+    "expected" : {
+      "retrySuccess" : true,
+      "oldConstraintRestored" : true,
+      "v6HistoryCountAfterFailure" : 0,
+      "migrationFailureSqlState" : "23514"
+    },
+    "observed" : {
+      "retrySuccess" : true,
+      "v6FileHashUnchanged" : true,
+      "v6HistoryCountAfterFailure" : 0,
+      "oldConstraintRestored" : true,
+      "finalHistoryCount" : 6,
+      "v6FileHash" : "14026d2a5db5af82b939af9607472fcb75c394d137c47a87d2b2d39ab85ec22b",
+      "migrationFailureSqlState" : "23514"
+    },
+    "assertionsPassed" : true
+  } ]
+}

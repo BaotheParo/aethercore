@@ -14,8 +14,11 @@ class ValidationError(Exception):
     """Raised when evidence collection fails validation rules."""
     pass
 
+def _is_strict_int(val):
+    return type(val) is int and not isinstance(val, bool)
+
 class EvidenceCollector:
-    def __init__(self, repo_root=None, prompt="prompt15"):
+    def __init__(self, repo_root=None, prompt="prompt20"):
         if repo_root is None:
             self.repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         else:
@@ -143,6 +146,8 @@ class EvidenceCollector:
                 'predicate-index-observations.json': [f"IP{i}" for i in range(1, 5)],
                 'idempotency-observations.json': [f"ID{i}" for i in range(1, 8)]
             }
+            if self.prompt in ("prompt20", "prompt21") or os.path.exists(os.path.join(staging_dir, 'migration-observations.json')):
+                required_sets['migration-observations.json'] = ["MG1", "MG2", "MG3"]
 
         validated = []
         for filename, expected_cases in required_sets.items():
@@ -191,6 +196,8 @@ class EvidenceCollector:
                     self._validate_predicate_index_scenario(case_id, s)
                 elif filename == 'idempotency-observations.json':
                     self._validate_idempotency_scenario(case_id, s)
+                elif filename == 'migration-observations.json':
+                    self._validate_migration_scenario(case_id, s)
 
             for exp in expected_cases:
                 if exp not in found_cases:
@@ -555,53 +562,206 @@ class EvidenceCollector:
             for f in ["stock", "purchaseCount", "purchaseId1", "purchaseId2", "replayed1", "replayed2"]:
                 if f not in obs:
                     raise ValidationError(f"Scenario ID1 missing observed field '{f}'")
-            if obs.get("purchaseId1") != obs.get("purchaseId2"):
-                raise ValidationError("Scenario ID1 purchaseId1 and purchaseId2 must match")
+            if not _is_strict_int(obs.get("stock")) or obs.get("stock") != 3:
+                raise ValidationError("Scenario ID1 stock must be integer 3")
+            if not _is_strict_int(obs.get("purchaseCount")) or obs.get("purchaseCount") != 1:
+                raise ValidationError("Scenario ID1 purchaseCount must be integer 1")
+            if obs.get("purchaseId1") != obs.get("purchaseId2") or not obs.get("purchaseId1"):
+                raise ValidationError("Scenario ID1 purchaseId1 and purchaseId2 must match and not be empty")
             if obs.get("replayed1") is not False or obs.get("replayed2") is not True:
                 raise ValidationError("Scenario ID1 replayed flags mismatch")
+            if "storedState" in obs and obs.get("storedState") != "COMPLETED":
+                raise ValidationError("Scenario ID1 storedState must be 'COMPLETED'")
+            if "resultCode" in obs and obs.get("resultCode") != "SUCCESS":
+                raise ValidationError("Scenario ID1 resultCode must be 'SUCCESS'")
+
         elif case_id == "ID2":
             for f in ["exQtyThrown", "exSkuThrown", "finalStock", "purchaseCount"]:
                 if f not in obs:
                     raise ValidationError(f"Scenario ID2 missing observed field '{f}'")
+            if not _is_strict_int(obs.get("finalStock")) or obs.get("finalStock") != 4:
+                raise ValidationError("Scenario ID2 finalStock must be integer 4")
+            if not _is_strict_int(obs.get("purchaseCount")) or obs.get("purchaseCount") != 1:
+                raise ValidationError("Scenario ID2 purchaseCount must be integer 1")
             if obs.get("exQtyThrown") != "IdempotencyConflictException" or obs.get("exSkuThrown") != "IdempotencyConflictException":
                 raise ValidationError("Scenario ID2 conflict exceptions must be IdempotencyConflictException")
+            if "storedRowUnchanged" in obs and obs.get("storedRowUnchanged") is not True:
+                raise ValidationError("Scenario ID2 storedRowUnchanged must be True")
+            if "invalidKeyCount" in obs and (not _is_strict_int(obs.get("invalidKeyCount")) or obs.get("invalidKeyCount") != 0):
+                raise ValidationError("Scenario ID2 invalidKeyCount must be integer 0")
+
         elif case_id == "ID3":
             for f in ["workerAPid", "workerBPid", "observedBlocking", "blockingPidList", "purchaseIdA", "purchaseIdB"]:
                 if f not in obs:
                     raise ValidationError(f"Scenario ID3 missing observed field '{f}'")
+            if not _is_strict_int(obs.get("workerAPid")) or obs.get("workerAPid") <= 0:
+                raise ValidationError("Scenario ID3 workerAPid must be a positive integer")
+            if not _is_strict_int(obs.get("workerBPid")) or obs.get("workerBPid") <= 0:
+                raise ValidationError("Scenario ID3 workerBPid must be a positive integer")
+            if obs.get("workerAPid") == obs.get("workerBPid"):
+                raise ValidationError("Scenario ID3 workerAPid and workerBPid must be distinct")
             if obs.get("observedBlocking") is not True:
                 raise ValidationError("Scenario ID3 observedBlocking must be True")
-            if obs.get("purchaseIdA") != obs.get("purchaseIdB"):
-                raise ValidationError("Scenario ID3 purchaseIdA and purchaseIdB must match")
+            b_list = obs.get("blockingPidList")
+            if not isinstance(b_list, list) or len(b_list) == 0:
+                raise ValidationError("Scenario ID3 blockingPidList must be a non-empty list")
+            if obs.get("workerAPid") not in b_list:
+                raise ValidationError("Scenario ID3 blockingPidList must contain workerAPid")
+            if obs.get("purchaseIdA") != obs.get("purchaseIdB") or not obs.get("purchaseIdA"):
+                raise ValidationError("Scenario ID3 purchaseIdA and purchaseIdB must match and not be empty")
+            if "finalStock" in obs and (not _is_strict_int(obs.get("finalStock")) or obs.get("finalStock") != 3):
+                raise ValidationError("Scenario ID3 finalStock must be integer 3")
+            if "purchaseCount" in obs and (not _is_strict_int(obs.get("purchaseCount")) or obs.get("purchaseCount") != 1):
+                raise ValidationError("Scenario ID3 purchaseCount must be integer 1")
+            if "replayedA" in obs and obs.get("replayedA") is not False:
+                raise ValidationError("Scenario ID3 replayedA must be False")
+            if "replayedB" in obs and obs.get("replayedB") is not True:
+                raise ValidationError("Scenario ID3 replayedB must be True")
+
         elif case_id == "ID4":
             for f in ["stock", "purchaseCount", "pId1", "pId2", "pId3"]:
                 if f not in obs:
                     raise ValidationError(f"Scenario ID4 missing observed field '{f}'")
+            if not _is_strict_int(obs.get("stock")) or obs.get("stock") != 7:
+                raise ValidationError("Scenario ID4 stock must be integer 7")
+            if not _is_strict_int(obs.get("purchaseCount")) or obs.get("purchaseCount") != 3:
+                raise ValidationError("Scenario ID4 purchaseCount must be integer 3")
             pids = [obs.get("pId1"), obs.get("pId2"), obs.get("pId3")]
-            if len(set(pids)) != 3:
-                raise ValidationError("Scenario ID4 purchases must have 3 distinct IDs")
+            if len(set(pids)) != 3 or None in pids:
+                raise ValidationError("Scenario ID4 purchases must have 3 distinct non-null IDs")
+            for rk in ["replayed1", "replayed2", "replayed3"]:
+                if rk in obs and obs.get(rk) is not False:
+                    raise ValidationError(f"Scenario ID4 {rk} must be False")
+
         elif case_id == "ID5":
             for f in ["observedSqlState", "stockAfterRollback", "stockAfterRetry"]:
                 if f not in obs:
                     raise ValidationError(f"Scenario ID5 missing observed field '{f}'")
             if obs.get("observedSqlState") != "23514":
                 raise ValidationError(f"Scenario ID5 observedSqlState must be '23514', got '{obs.get('observedSqlState')}'")
-            if obs.get("stockAfterRollback") != 5 or obs.get("stockAfterRetry") != 3:
-                raise ValidationError("Scenario ID5 stock transition mismatch")
+            if not _is_strict_int(obs.get("stockAfterRollback")) or obs.get("stockAfterRollback") != 5:
+                raise ValidationError("Scenario ID5 stockAfterRollback must be integer 5")
+            if not _is_strict_int(obs.get("stockAfterRetry")) or obs.get("stockAfterRetry") != 3:
+                raise ValidationError("Scenario ID5 stockAfterRetry must be integer 3")
+            if "purchaseCountAfterRollback" in obs:
+                if not _is_strict_int(obs.get("purchaseCountAfterRollback")) or obs.get("purchaseCountAfterRollback") != 0:
+                    raise ValidationError("Scenario ID5 purchaseCountAfterRollback must be integer 0")
+            if "idempotencyCountAfterRollback" in obs:
+                if not _is_strict_int(obs.get("idempotencyCountAfterRollback")) or obs.get("idempotencyCountAfterRollback") != 0:
+                    raise ValidationError("Scenario ID5 idempotencyCountAfterRollback must be integer 0")
+            if "purchaseCountAfterRetry" in obs:
+                if not _is_strict_int(obs.get("purchaseCountAfterRetry")) or obs.get("purchaseCountAfterRetry") != 1:
+                    raise ValidationError("Scenario ID5 purchaseCountAfterRetry must be integer 1")
+            if "idempotencyCountAfterRetry" in obs:
+                if not _is_strict_int(obs.get("idempotencyCountAfterRetry")) or obs.get("idempotencyCountAfterRetry") != 1:
+                    raise ValidationError("Scenario ID5 idempotencyCountAfterRetry must be integer 1")
+
         elif case_id == "ID6":
             for f in ["replayResult", "replayFlag", "newKeyResult", "finalStock", "totalSold"]:
                 if f not in obs:
                     raise ValidationError(f"Scenario ID6 missing observed field '{f}'")
             if obs.get("replayResult") != "NOT_AVAILABLE" or obs.get("newKeyResult") != "SUCCESS":
                 raise ValidationError("Scenario ID6 outcomes mismatch")
+            if obs.get("replayFlag") is not True:
+                raise ValidationError("Scenario ID6 replayFlag must be True")
+            if not _is_strict_int(obs.get("finalStock")) or not _is_strict_int(obs.get("totalSold")):
+                raise ValidationError("Scenario ID6 finalStock and totalSold must be integers")
             if obs.get("finalStock") + obs.get("totalSold") != 5:
                 raise ValidationError("Scenario ID6 stock conservation violated")
+            if obs.get("finalStock") != 3 or obs.get("totalSold") != 2:
+                raise ValidationError("Scenario ID6 finalStock must be 3 and totalSold must be 2")
+            if "idempotencyCount" in obs and (not _is_strict_int(obs.get("idempotencyCount")) or obs.get("idempotencyCount") != 2):
+                raise ValidationError("Scenario ID6 idempotencyCount must be integer 2")
+
         elif case_id == "ID7":
             for f in ["stockAfterRollback", "stockAfterRetry", "purchaseCountAfterRetry"]:
                 if f not in obs:
                     raise ValidationError(f"Scenario ID7 missing observed field '{f}'")
-            if obs.get("stockAfterRollback") != 5 or obs.get("stockAfterRetry") != 3:
-                raise ValidationError("Scenario ID7 stock transition mismatch")
+            if not _is_strict_int(obs.get("stockAfterRollback")) or obs.get("stockAfterRollback") != 5:
+                raise ValidationError("Scenario ID7 stockAfterRollback must be integer 5")
+            if not _is_strict_int(obs.get("stockAfterRetry")) or obs.get("stockAfterRetry") != 3:
+                raise ValidationError("Scenario ID7 stockAfterRetry must be integer 3")
+            if not _is_strict_int(obs.get("purchaseCountAfterRetry")) or obs.get("purchaseCountAfterRetry") != 1:
+                raise ValidationError("Scenario ID7 purchaseCountAfterRetry must be integer 1")
+            if "purchaseCountAfterRollback" in obs:
+                if not _is_strict_int(obs.get("purchaseCountAfterRollback")) or obs.get("purchaseCountAfterRollback") != 0:
+                    raise ValidationError("Scenario ID7 purchaseCountAfterRollback must be integer 0")
+            if "idempotencyCountAfterRollback" in obs:
+                if not _is_strict_int(obs.get("idempotencyCountAfterRollback")) or obs.get("idempotencyCountAfterRollback") != 0:
+                    raise ValidationError("Scenario ID7 idempotencyCountAfterRollback must be integer 0")
+            if "idempotencyCountAfterRetry" in obs:
+                if not _is_strict_int(obs.get("idempotencyCountAfterRetry")) or obs.get("idempotencyCountAfterRetry") != 1:
+                    raise ValidationError("Scenario ID7 idempotencyCountAfterRetry must be integer 1")
+
+    def _validate_migration_scenario(self, case_id, s):
+        for req_field in ["caseId", "description", "expected", "observed", "assertionsPassed"]:
+            if req_field not in s:
+                raise ValidationError(f"Scenario {case_id} missing required field '{req_field}' in migration-observations.json")
+
+        if s.get("assertionsPassed") is not True:
+            raise ValidationError(f"Scenario {case_id} assertionsPassed must be True")
+
+        obs = s.get("observed")
+        if not isinstance(obs, dict):
+            raise ValidationError(f"Scenario {case_id} observed must be a dict")
+
+        if case_id == "MG1":
+            for f in ["v5MalformedAccepted", "validDataPreserved", "v6Success", "v6Validated",
+                      "repeatMigrationCount", "historyCount", "v5ConstraintDef", "v6ConstraintDef"]:
+                if f not in obs:
+                    raise ValidationError(f"Scenario MG1 missing observed field '{f}'")
+            if obs.get("v5MalformedAccepted") is not True:
+                raise ValidationError("Scenario MG1 v5MalformedAccepted must be True")
+            if obs.get("validDataPreserved") is not True:
+                raise ValidationError("Scenario MG1 validDataPreserved must be True")
+            if obs.get("v6Success") is not True:
+                raise ValidationError("Scenario MG1 v6Success must be True")
+            if obs.get("v6Validated") is not True:
+                raise ValidationError("Scenario MG1 v6Validated must be True")
+            if not _is_strict_int(obs.get("repeatMigrationCount")) or obs.get("repeatMigrationCount") != 0:
+                raise ValidationError("Scenario MG1 repeatMigrationCount must be integer 0")
+            if not _is_strict_int(obs.get("historyCount")) or obs.get("historyCount") != 6:
+                raise ValidationError("Scenario MG1 historyCount must be integer 6")
+            if "result_code IS NOT NULL" not in obs.get("v6ConstraintDef", ""):
+                raise ValidationError("Scenario MG1 v6ConstraintDef must contain 'result_code IS NOT NULL'")
+
+        elif case_id == "MG2":
+            for f in ["truthTable", "updateRejected", "updateSqlState", "rowIntactAfterUpdateFailure"]:
+                if f not in obs:
+                    raise ValidationError(f"Scenario MG2 missing observed field '{f}'")
+            if obs.get("updateRejected") is not True:
+                raise ValidationError("Scenario MG2 updateRejected must be True")
+            if obs.get("updateSqlState") != "23514":
+                raise ValidationError(f"Scenario MG2 updateSqlState must be '23514', got '{obs.get('updateSqlState')}'")
+            if obs.get("rowIntactAfterUpdateFailure") is not True:
+                raise ValidationError("Scenario MG2 rowIntactAfterUpdateFailure must be True")
+            tt = obs.get("truthTable")
+            if not isinstance(tt, list) or len(tt) != 8:
+                raise ValidationError("Scenario MG2 truthTable must contain exactly 8 entries")
+            for row in tt:
+                if row.get("expected") != row.get("actual"):
+                    raise ValidationError(f"Scenario MG2 truthTable mismatch: expected {row.get('expected')}, actual {row.get('actual')}")
+                if row.get("state") == "COMPLETED" and row.get("resultCode") is None:
+                    if row.get("actual") != "REJECT" or row.get("sqlState") != "23514":
+                        raise ValidationError("Scenario MG2 COMPLETED/null must be rejected with SQLSTATE 23514")
+
+        elif case_id == "MG3":
+            for f in ["migrationFailureSqlState", "oldConstraintRestored", "v6HistoryCountAfterFailure",
+                      "v6FileHash", "v6FileHashUnchanged", "retrySuccess", "finalHistoryCount"]:
+                if f not in obs:
+                    raise ValidationError(f"Scenario MG3 missing observed field '{f}'")
+            if obs.get("migrationFailureSqlState") != "23514":
+                raise ValidationError(f"Scenario MG3 migrationFailureSqlState must be '23514', got '{obs.get('migrationFailureSqlState')}'")
+            if obs.get("oldConstraintRestored") is not True:
+                raise ValidationError("Scenario MG3 oldConstraintRestored must be True")
+            if not _is_strict_int(obs.get("v6HistoryCountAfterFailure")) or obs.get("v6HistoryCountAfterFailure") != 0:
+                raise ValidationError("Scenario MG3 v6HistoryCountAfterFailure must be integer 0")
+            if obs.get("v6FileHashUnchanged") is not True:
+                raise ValidationError("Scenario MG3 v6FileHashUnchanged must be True")
+            if obs.get("retrySuccess") is not True:
+                raise ValidationError("Scenario MG3 retrySuccess must be True")
+            if not _is_strict_int(obs.get("finalHistoryCount")) or obs.get("finalHistoryCount") != 6:
+                raise ValidationError("Scenario MG3 finalHistoryCount must be integer 6")
 
     def generate_summary_text(self, core_res, backend_res, meta):
         total_core = core_res['total_tests']
@@ -822,7 +982,7 @@ REACTOR TOTAL: {total_reactor} Tests Run | {total_failures} Failures | {total_er
 def main():
     parser = argparse.ArgumentParser(description="AetherCore Lab Evidence Collector")
     parser.add_argument("--run", action="store_true", help="Execute full Maven clean test before collection")
-    parser.add_argument("--prompt", type=str, default="prompt15", help="Target prompt directory under docs/evidence (e.g. prompt15)")
+    parser.add_argument("--prompt", type=str, default="prompt20", help="Target prompt directory under docs/evidence (e.g. prompt15)")
     args = parser.parse_args()
 
     collector = EvidenceCollector(prompt=args.prompt)

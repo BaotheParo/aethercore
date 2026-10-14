@@ -83,3 +83,15 @@ Triển khai trong `MarketIdempotencyIntegrationTest.java` trên Testcontainers 
 - [x] **Gate E — Atomicity:** ID5 và ID7 chứng minh cơ chế rollback sạch sẽ cả claim, stock và purchase; các lần retry tiếp theo thành công.
 - [x] **Gate F — Evidence/Regression:** Run ID thống nhất; validator Python và full reactor 116 tests đều PASS.
 - [x] **Gate G — Learning:** Tài liệu kỹ thuật `M2-E6A.md` và bài tập `M2-E6A-exercise.md` đầy đủ; trạng thái học viên giữ nguyên `[AWAITING_CANDIDATE]`.
+
+---
+
+## 8. B? Sung ??nh Ch?nh T? Review Prompt 20 (Audit Findings)
+
+1. **Chu?n h?a danh x?ng b?ng:** B?ng idempotency trong V5 t?n ch?nh x?c l? `market_idempotency`, b?ng ??n h?ng trong V3 t?n l? `market_purchase`. Kh?ng d?ng `_record` hay `_order`.
+2. **Kh? ??c Caller & Security:** `caller_id` l? input ??ng tin c?y ? t?ng giao ti?p application; h? th?ng ch?a c? l?p x?c th?c token / authorization.
+3. **Ph?n bi?t xung ??t d? li?u v? t?n c?ng:** Vi?c g?i sai payload v?i c?ng key l? xung ??t logic (`IdempotencyConflictException`), kh?ng v?i v?ng coi l? t?n c?ng an ninh m?ng.
+4. **Gi?i h?n b?m & nghi?p v?:** H?m b?m `request_fingerprint` kh?ng ??m b?o t?nh ??c nh?t tuy?t ??i v? m?t to?n h?c; service lu?n so s?nh ??i ch?ng c? SKU v? quantity.
+5. **C? ch? ?o l??ng Lock:** Trong k?ch b?n ID3, ph?p ?o th?c t? l? ki?m tra `workerAPid in pg_blocking_pids(workerBPid)`. Kh?ng t? suy ?o?n lock mode `ExclusiveLock` tr?n index tuple khi ch?a truy v?n catalog `pg_locks`.
+6. **K?ch ho?t rollback ID7:** Rollback ???c k?ch ho?t do n?m `RuntimeException` trong outer callback, kh?ng th?ng qua c? `setRollbackOnly()`.
+7. **L? h?ng CHECK V5:** X?c nh?n V5 thi?u `result_code IS NOT NULL` d?n t?i vi?c PostgreSQL ch?p nh?n b?n ghi `COMPLETED / null / null` do c? ch? 3-valued logic. V?n ?? ???c gi?i quy?t tri?t ?? t?i Prompt 20 qua migration V6.

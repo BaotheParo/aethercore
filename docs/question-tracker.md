@@ -71,6 +71,11 @@
 | **H04** | 200/201/202 cho tác vụ nền và tra cứu tiến độ | M2-E6A (Chưa triển khai async/polling API trong phiên này) | NOT_COVERED | - | `AWAITING_CANDIDATE` | - |
 | **SB42** | Phân biệt 400/401/403/404/409/422/500 | M2-E6A (Ném IdempotencyConflictException nội bộ, chưa map HTTP status codes ở controller) | NOT_COVERED | - | `AWAITING_CANDIDATE` | - |
 | **SB43** | API tạo tài nguyên an toàn khi request gửi lại | M2-E6A (ID1..ID7 transactional claim & replay logic đã kiểm chứng chặt chẽ, API end-to-end chưa có) | PARTIAL | `VERIFIED` (PostgreSQL 16) | `AWAITING_CANDIDATE` | - |
+| **SB59** | Flyway/Liquibase quản lý schema; migration lỗi khi deploy | M2-E7A (MG1..MG3 kiểm chứng Flyway transactional DDL rollback trên PostgreSQL 16; retry sau khi dọn dữ liệu không cần repair; chưa lab Liquibase) | VERIFIED | VERIFIED (PostgreSQL 16) | AWAITING_CANDIDATE | - |
+| **SQL68** | Schema mới, dữ liệu cũ, phiên bản code đang chạy | M2-E7A (MG1 upgrade V5->V6 dữ liệu hợp lệ; MG3 phát hiện và rollback khi gặp dữ liệu cũ vi phạm constraint; chưa test rolling mixed-version deployment) | VERIFIED | VERIFIED (PostgreSQL 16) | AWAITING_CANDIDATE | - |
+| **SB60** | Thay schema tương thích với code cũ/mới | M2-E7A (Thêm NOT NULL guard trong CHECK constraint giữ tương thích contract service hiện có; chưa thử nghiệm rolling deployment với code version cũ) | PARTIAL | VERIFIED (PostgreSQL 16) | AWAITING_CANDIDATE | - |
+| **SB56** | H2 có thể bỏ sót lỗi gì so với DB thật | M2-E7A (Phân tích lý thuyết sự khác biệt cú pháp CHECK, transactional DDL và 3-valued logic; không có H2 đối chứng runtime trong phiên) | PARTIAL | PARTIAL (Lý thuyết) | AWAITING_CANDIDATE | - |
+| **SQL69** | Tạo index bảng lớn ảnh hưởng ghi và deploy | M2-E7A (Chưa đo lường runtime ảnh hưởng ghi và deploy trên bảng lớn trong phiên này) | NOT_COVERED | - | AWAITING_CANDIDATE | - |
 
 ---
 
