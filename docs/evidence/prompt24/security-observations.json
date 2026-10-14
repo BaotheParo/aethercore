@@ -1,0 +1,1006 @@
+{
+  "schemaVersion" : "1.0.0",
+  "runId" : "prompt24-20261014-172137-be44a2",
+  "generatedAt" : "2026-10-14T10:23:00.067915Z",
+  "scenarioCount" : 9,
+  "scenarios" : [ {
+    "caseId" : "SEC1",
+    "scenarioId" : "SEC1",
+    "subcaseCount" : 3,
+    "subcases" : [ {
+      "variant" : "missing_token",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "malformed_token",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "wrong_key_b",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    } ]
+  }, {
+    "caseId" : "SEC2",
+    "scenarioId" : "SEC2",
+    "subcaseCount" : 13,
+    "subcases" : [ {
+      "variant" : "wrong_issuer",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "missing_audience",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "wrong_audience",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "expired",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "future_nbf",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "missing_exp",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "missing_sub",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "invalid_sub_non_uuid",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "roles_as_integer",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "roles_as_string",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "sub_with_whitespace",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "sub_shortened_uuid",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "roles_array_non_string_element",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    } ]
+  }, {
+    "caseId" : "SEC3",
+    "scenarioId" : "SEC3",
+    "subcaseCount" : 4,
+    "subcases" : [ {
+      "variant" : "empty_roles",
+      "expectedStatus" : 403,
+      "observedStatus" : 403,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "viewer_role_only",
+      "expectedStatus" : 403,
+      "observedStatus" : 403,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "trader_role_success",
+      "expectedStatus" : 200,
+      "observedStatus" : 200,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"resultCode\":\"SUCCESS\",\"purchaseId\":\"6153167c-b6e5-4df0-b12c-d66c53f66d0e\",\"replayed\":false}",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "stateUnchanged" : false
+    }, {
+      "variant" : "absent_roles_claim",
+      "expectedStatus" : 403,
+      "observedStatus" : 403,
+      "bearerChallengePresent" : true,
+      "responseBody" : "",
+      "before" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "after" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "stateUnchanged" : true
+    } ]
+  }, {
+    "caseId" : "SEC4",
+    "scenarioId" : "SEC4",
+    "subcaseCount" : 3,
+    "subcases" : [ {
+      "variant" : "fresh_purchase",
+      "expectedStatus" : 200,
+      "observedStatus" : 200,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"resultCode\":\"SUCCESS\",\"purchaseId\":\"92e8780d-e0b2-4e75-8024-bf5017941950\",\"replayed\":false}",
+      "before" : {
+        "stockAvailable" : 5,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 3,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "stateUnchanged" : false
+    }, {
+      "variant" : "replay_exact",
+      "expectedStatus" : 200,
+      "observedStatus" : 200,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"resultCode\":\"SUCCESS\",\"purchaseId\":\"92e8780d-e0b2-4e75-8024-bf5017941950\",\"replayed\":true}",
+      "before" : {
+        "stockAvailable" : 3,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "after" : {
+        "stockAvailable" : 3,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "conflict_reuse",
+      "expectedStatus" : 409,
+      "observedStatus" : 409,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"error\":\"IDEMPOTENCY_CONFLICT\",\"message\":\"Idempotency conflict: key has already been used for a different request payload\"}",
+      "before" : {
+        "stockAvailable" : 3,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "after" : {
+        "stockAvailable" : 3,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "stateUnchanged" : true
+    } ]
+  }, {
+    "caseId" : "SEC5",
+    "scenarioId" : "SEC5",
+    "subcaseCount" : 3,
+    "subcases" : [ {
+      "variant" : "caller_b_read_foreign_key",
+      "expectedStatus" : 404,
+      "observedStatus" : 404,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"error\":\"PURCHASE_REQUEST_NOT_FOUND\",\"message\":\"Completed purchase request not found for key 'd40978c2-562a-48fe-8d44-6fdba7c2f6d3'\"}",
+      "before" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "after" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "caller_a_read_own_key",
+      "expectedStatus" : 200,
+      "observedStatus" : 200,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"idempotencyKey\":\"d40978c2-562a-48fe-8d44-6fdba7c2f6d3\",\"callerId\":\"0b7f82bb-ef1c-49a7-895d-02714fb49b99\",\"operation\":\"PURCHASE_V1\",\"state\":\"COMPLETED\",\"resultCode\":\"SUCCESS\",\"purchaseId\":\"9075b137-6673-4969-b210-f2df50832275\",\"sku\":\"SEC5_IRON\",\"quantity\":2}",
+      "before" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "after" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "read_unknown_key",
+      "expectedStatus" : 404,
+      "observedStatus" : 404,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"error\":\"PURCHASE_REQUEST_NOT_FOUND\",\"message\":\"Completed purchase request not found for key 'c87542e7-f823-4848-9205-3919c44ae939'\"}",
+      "before" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "after" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "stateUnchanged" : true
+    } ]
+  }, {
+    "caseId" : "SEC6",
+    "scenarioId" : "SEC6",
+    "subcaseCount" : 4,
+    "subcases" : [ {
+      "variant" : "caller_a_purchase_key_k",
+      "expectedStatus" : 200,
+      "observedStatus" : 200,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"resultCode\":\"SUCCESS\",\"purchaseId\":\"24590e33-9693-4b62-90e7-6dc6c9271ee1\",\"replayed\":false}",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "stateUnchanged" : false
+    }, {
+      "variant" : "caller_b_purchase_same_key_k",
+      "expectedStatus" : 200,
+      "observedStatus" : 200,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"resultCode\":\"SUCCESS\",\"purchaseId\":\"861b04e0-8d24-4d99-b8d5-ff1a64b8d904\",\"replayed\":false}",
+      "before" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "after" : {
+        "stockAvailable" : 6,
+        "stockVersion" : 2,
+        "purchaseCount" : 2,
+        "purchaseSumQuantity" : 4,
+        "idempotencyRowCount" : 2
+      },
+      "stateUnchanged" : false
+    }, {
+      "variant" : "caller_a_read_k",
+      "expectedStatus" : 200,
+      "observedStatus" : 200,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"idempotencyKey\":\"0e8b1114-5328-4a0d-ad58-672f06eaf542\",\"callerId\":\"d77ee326-b6dd-4c99-b035-1475fe8e9dbd\",\"operation\":\"PURCHASE_V1\",\"state\":\"COMPLETED\",\"resultCode\":\"SUCCESS\",\"purchaseId\":\"24590e33-9693-4b62-90e7-6dc6c9271ee1\",\"sku\":\"SEC6_IRON\",\"quantity\":2}",
+      "before" : {
+        "stockAvailable" : 6,
+        "stockVersion" : 2,
+        "purchaseCount" : 2,
+        "purchaseSumQuantity" : 4,
+        "idempotencyRowCount" : 2
+      },
+      "after" : {
+        "stockAvailable" : 6,
+        "stockVersion" : 2,
+        "purchaseCount" : 2,
+        "purchaseSumQuantity" : 4,
+        "idempotencyRowCount" : 2
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "caller_b_read_k",
+      "expectedStatus" : 200,
+      "observedStatus" : 200,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"idempotencyKey\":\"0e8b1114-5328-4a0d-ad58-672f06eaf542\",\"callerId\":\"48ac3e86-d993-4b03-9342-7d3c9c34a0c0\",\"operation\":\"PURCHASE_V1\",\"state\":\"COMPLETED\",\"resultCode\":\"SUCCESS\",\"purchaseId\":\"861b04e0-8d24-4d99-b8d5-ff1a64b8d904\",\"sku\":\"SEC6_IRON\",\"quantity\":2}",
+      "before" : {
+        "stockAvailable" : 6,
+        "stockVersion" : 2,
+        "purchaseCount" : 2,
+        "purchaseSumQuantity" : 4,
+        "idempotencyRowCount" : 2
+      },
+      "after" : {
+        "stockAvailable" : 6,
+        "stockVersion" : 2,
+        "purchaseCount" : 2,
+        "purchaseSumQuantity" : 4,
+        "idempotencyRowCount" : 2
+      },
+      "stateUnchanged" : true
+    } ]
+  }, {
+    "caseId" : "SEC7",
+    "scenarioId" : "SEC7",
+    "subcaseCount" : 3,
+    "subcases" : [ {
+      "variant" : "spoof_via_header_ignored",
+      "expectedStatus" : 200,
+      "observedStatus" : 200,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"resultCode\":\"SUCCESS\",\"purchaseId\":\"d289f5dc-6bb2-4e0a-8392-3275a351dddf\",\"replayed\":false}",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "stateUnchanged" : false
+    }, {
+      "variant" : "spoof_via_query_ignored",
+      "expectedStatus" : 200,
+      "observedStatus" : 200,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"resultCode\":\"SUCCESS\",\"purchaseId\":\"79621b0a-95ab-460f-8edb-eae319e7a45e\",\"replayed\":false}",
+      "before" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "after" : {
+        "stockAvailable" : 6,
+        "stockVersion" : 2,
+        "purchaseCount" : 2,
+        "purchaseSumQuantity" : 4,
+        "idempotencyRowCount" : 2
+      },
+      "stateUnchanged" : false
+    }, {
+      "variant" : "spoof_via_body_rejected_400",
+      "expectedStatus" : 400,
+      "observedStatus" : 400,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"error\":\"INVALID_REQUEST\",\"message\":\"Malformed JSON request body or invalid property type\"}",
+      "before" : {
+        "stockAvailable" : 6,
+        "stockVersion" : 2,
+        "purchaseCount" : 2,
+        "purchaseSumQuantity" : 4,
+        "idempotencyRowCount" : 2
+      },
+      "after" : {
+        "stockAvailable" : 6,
+        "stockVersion" : 2,
+        "purchaseCount" : 2,
+        "purchaseSumQuantity" : 4,
+        "idempotencyRowCount" : 2
+      },
+      "stateUnchanged" : true
+    } ]
+  }, {
+    "caseId" : "SEC8",
+    "scenarioId" : "SEC8",
+    "subcaseCount" : 11,
+    "subcases" : [ {
+      "variant" : "missing_idempotency_key",
+      "expectedStatus" : 400,
+      "observedStatus" : 400,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"error\":\"INVALID_REQUEST\",\"message\":\"Header 'Idempotency-Key' is required\"}",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "invalid_uuid_idempotency_key",
+      "expectedStatus" : 400,
+      "observedStatus" : 400,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"error\":\"INVALID_REQUEST\",\"message\":\"Header 'Idempotency-Key' must be a 36-character canonical UUID string: not-a-uuid\"}",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "malformed_json_body",
+      "expectedStatus" : 400,
+      "observedStatus" : 400,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"error\":\"INVALID_REQUEST\",\"message\":\"Malformed JSON request body or invalid property type\"}",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "quantity_zero",
+      "expectedStatus" : 400,
+      "observedStatus" : 400,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"error\":\"INVALID_REQUEST\",\"message\":\"quantity must be strictly positive (> 0)\"}",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "quantity_negative",
+      "expectedStatus" : 400,
+      "observedStatus" : 400,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"error\":\"INVALID_REQUEST\",\"message\":\"quantity must be strictly positive (> 0)\"}",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "quantity_null",
+      "expectedStatus" : 400,
+      "observedStatus" : 400,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"error\":\"INVALID_REQUEST\",\"message\":\"quantity must not be null\"}",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "quantity_decimal_coercion_rejected",
+      "expectedStatus" : 400,
+      "observedStatus" : 400,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"error\":\"INVALID_REQUEST\",\"message\":\"Malformed JSON request body or invalid property type\"}",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "sku_blank",
+      "expectedStatus" : 400,
+      "observedStatus" : 400,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"error\":\"INVALID_REQUEST\",\"message\":\"sku must not be null or blank\"}",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "sku_too_long",
+      "expectedStatus" : 400,
+      "observedStatus" : 400,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"error\":\"INVALID_REQUEST\",\"message\":\"sku length must not exceed 64\"}",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "not_available_fresh",
+      "expectedStatus" : 200,
+      "observedStatus" : 200,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"resultCode\":\"NOT_AVAILABLE\",\"purchaseId\":null,\"replayed\":false}",
+      "before" : {
+        "stockAvailable" : 0,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 0,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 1
+      },
+      "stateUnchanged" : false
+    }, {
+      "variant" : "not_available_replayed_after_restock",
+      "expectedStatus" : 200,
+      "observedStatus" : 200,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"resultCode\":\"NOT_AVAILABLE\",\"purchaseId\":null,\"replayed\":true}",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 1
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 1
+      },
+      "stateUnchanged" : true
+    } ]
+  }, {
+    "caseId" : "SEC9",
+    "scenarioId" : "SEC9",
+    "subcaseCount" : 5,
+    "subcases" : [ {
+      "variant" : "stateless_request_with_token",
+      "expectedStatus" : 200,
+      "observedStatus" : 200,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"resultCode\":\"SUCCESS\",\"purchaseId\":\"60a6ac31-bd88-4b48-880a-591240b717b7\",\"replayed\":false}"
+    }, {
+      "variant" : "stateless_request_without_token_rejected_401",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : ""
+    }, {
+      "variant" : "public_get_lab_entry_200",
+      "expectedStatus" : 200,
+      "observedStatus" : 200,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"id\":\"entry-01\",\"label\":\"AetherCore Baseline Initial Lab Entry\"}"
+    }, {
+      "variant" : "public_get_lab_entry_404",
+      "expectedStatus" : 404,
+      "observedStatus" : 404,
+      "bearerChallengePresent" : false,
+      "responseBody" : "{\"error\":\"NOT_FOUND\",\"message\":\"Lab entry with id 'non-existent-id' does not exist\",\"requested_id\":\"non-existent-id\"}"
+    }, {
+      "variant" : "undeclared_route_denied",
+      "expectedStatus" : 401,
+      "observedStatus" : 401,
+      "bearerChallengePresent" : true,
+      "responseBody" : ""
+    } ]
+  } ]
+}

@@ -20,8 +20,8 @@ import java.util.UUID;
  * 2. Mandatory existence of exp claim.
  * 3. Exact issuer match.
  * 4. Audience inclusion.
- * 5. Canonical UUID format for subject (sub).
- * 6. Valid types for 'roles' claim if present.
+ * 5. Canonical UUID format for subject (sub) without untracked trimming.
+ * 6. Valid string types for 'roles' claim array if present.
  */
 public final class AetherJwtValidators {
 
@@ -57,19 +57,19 @@ public final class AetherJwtValidators {
                 return OAuth2TokenValidatorResult.failure(error);
             }
 
-            // sub must be present and a canonical UUID
+            // sub must be present and strictly a 36-character canonical UUID (no whitespace, no shortened forms)
             String sub = token.getSubject();
-            if (sub == null || sub.trim().isEmpty()) {
+            if (sub == null || sub.length() != 36) {
                 OAuth2Error error = new OAuth2Error(
                         OAuth2ErrorCodes.INVALID_TOKEN,
-                        "Missing mandatory subject claim ('sub')",
+                        "Subject claim ('sub') must be a 36-character canonical UUID string",
                         null
                 );
                 return OAuth2TokenValidatorResult.failure(error);
             }
             try {
-                UUID parsed = UUID.fromString(sub.trim());
-                if (!parsed.toString().equalsIgnoreCase(sub.trim())) {
+                UUID parsed = UUID.fromString(sub);
+                if (!parsed.toString().equalsIgnoreCase(sub)) {
                     OAuth2Error error = new OAuth2Error(
                             OAuth2ErrorCodes.INVALID_TOKEN,
                             "Subject claim ('sub') must be a canonical UUID string",
@@ -86,16 +86,28 @@ public final class AetherJwtValidators {
                 return OAuth2TokenValidatorResult.failure(error);
             }
 
-            // roles must be Collection if present
+            // roles must be Collection of Strings if present
             if (token.hasClaim("roles")) {
                 Object roles = token.getClaim("roles");
-                if (roles != null && !(roles instanceof Collection<?>)) {
-                    OAuth2Error error = new OAuth2Error(
-                            OAuth2ErrorCodes.INVALID_TOKEN,
-                            "The 'roles' claim must be an array of strings",
-                            null
-                    );
-                    return OAuth2TokenValidatorResult.failure(error);
+                if (roles != null) {
+                    if (!(roles instanceof Collection<?> col)) {
+                        OAuth2Error error = new OAuth2Error(
+                                OAuth2ErrorCodes.INVALID_TOKEN,
+                                "The 'roles' claim must be an array of strings",
+                                null
+                        );
+                        return OAuth2TokenValidatorResult.failure(error);
+                    }
+                    for (Object roleItem : col) {
+                        if (!(roleItem instanceof String)) {
+                            OAuth2Error error = new OAuth2Error(
+                                    OAuth2ErrorCodes.INVALID_TOKEN,
+                                    "Elements in 'roles' claim array must be strings",
+                                    null
+                            );
+                            return OAuth2TokenValidatorResult.failure(error);
+                        }
+                    }
                 }
             }
 

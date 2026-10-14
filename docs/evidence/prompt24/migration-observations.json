@@ -1,0 +1,315 @@
+{
+  "schemaVersion" : "1.0.0",
+  "runId" : "prompt24-20261014-172137-be44a2",
+  "timestamp" : "2026-10-14T10:22:21.938198200Z",
+  "database" : {
+    "image" : "postgres:16-alpine",
+    "serverVersion" : "16.15",
+    "databaseName" : "aethercore_migration_test",
+    "isolationDefault" : "read committed"
+  },
+  "scenarios" : [ {
+    "caseId" : "MG1",
+    "description" : "Recreate V5 flaw and upgrade to V6 with valid data preserved",
+    "schema" : "mg1_schema",
+    "expected" : {
+      "v6Success" : true,
+      "v5MalformedAccepted" : true,
+      "validDataPreserved" : true,
+      "repeatMigrationCount" : 0
+    },
+    "observed" : {
+      "v6ConstraintDef" : "CHECK (((((state)::text = 'PROCESSING'::text) AND (result_code IS NULL) AND (purchase_id IS NULL)) OR (((state)::text = 'COMPLETED'::text) AND (result_code IS NOT NULL) AND ((((result_code)::text = 'SUCCESS'::text) AND (purchase_id IS NOT NULL)) OR (((result_code)::text = 'NOT_AVAILABLE'::text) AND (purchase_id IS NULL))))))",
+      "repeatMigrationCount" : 0,
+      "historyBefore" : [ {
+        "installed_rank" : 1,
+        "version" : "1",
+        "description" : "create lab entry table",
+        "type" : "SQL",
+        "script" : "V1__create_lab_entry_table.sql",
+        "checksum" : -1491295416,
+        "success" : true
+      }, {
+        "installed_rank" : 2,
+        "version" : "2",
+        "description" : "seed demo entries",
+        "type" : "SQL",
+        "script" : "V2__seed_demo_entries.sql",
+        "checksum" : -1300216155,
+        "success" : true
+      }, {
+        "installed_rank" : 3,
+        "version" : "3",
+        "description" : "create market tables",
+        "type" : "SQL",
+        "script" : "V3__create_market_tables.sql",
+        "checksum" : -2106612530,
+        "success" : true
+      }, {
+        "installed_rank" : 4,
+        "version" : "4",
+        "description" : "add market stock version",
+        "type" : "SQL",
+        "script" : "V4__add_market_stock_version.sql",
+        "checksum" : -1537607967,
+        "success" : true
+      }, {
+        "installed_rank" : 5,
+        "version" : "5",
+        "description" : "create market idempotency",
+        "type" : "SQL",
+        "script" : "V5__create_market_idempotency.sql",
+        "checksum" : -1349134787,
+        "success" : true
+      } ],
+      "v5MalformedAccepted" : true,
+      "validDataPreserved" : true,
+      "historyCount" : 6,
+      "v6Validated" : true,
+      "v5ConstraintDef" : "CHECK (((((state)::text = 'PROCESSING'::text) AND (result_code IS NULL) AND (purchase_id IS NULL)) OR (((state)::text = 'COMPLETED'::text) AND ((((result_code)::text = 'SUCCESS'::text) AND (purchase_id IS NOT NULL)) OR (((result_code)::text = 'NOT_AVAILABLE'::text) AND (purchase_id IS NULL))))))",
+      "historyAfter" : [ {
+        "installed_rank" : 1,
+        "version" : "1",
+        "description" : "create lab entry table",
+        "type" : "SQL",
+        "script" : "V1__create_lab_entry_table.sql",
+        "checksum" : -1491295416,
+        "success" : true
+      }, {
+        "installed_rank" : 2,
+        "version" : "2",
+        "description" : "seed demo entries",
+        "type" : "SQL",
+        "script" : "V2__seed_demo_entries.sql",
+        "checksum" : -1300216155,
+        "success" : true
+      }, {
+        "installed_rank" : 3,
+        "version" : "3",
+        "description" : "create market tables",
+        "type" : "SQL",
+        "script" : "V3__create_market_tables.sql",
+        "checksum" : -2106612530,
+        "success" : true
+      }, {
+        "installed_rank" : 4,
+        "version" : "4",
+        "description" : "add market stock version",
+        "type" : "SQL",
+        "script" : "V4__add_market_stock_version.sql",
+        "checksum" : -1537607967,
+        "success" : true
+      }, {
+        "installed_rank" : 5,
+        "version" : "5",
+        "description" : "create market idempotency",
+        "type" : "SQL",
+        "script" : "V5__create_market_idempotency.sql",
+        "checksum" : -1349134787,
+        "success" : true
+      }, {
+        "installed_rank" : 6,
+        "version" : "6",
+        "description" : "fix market idempotency state shape",
+        "type" : "SQL",
+        "script" : "V6__fix_market_idempotency_state_shape.sql",
+        "checksum" : -266162290,
+        "success" : true
+      } ],
+      "v6Success" : true
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "MG2",
+    "description" : "Truth table shape validation after V6 and UPDATE rejection",
+    "schema" : "mg2_schema",
+    "expected" : {
+      "allVariantsMatch" : true,
+      "updateSqlState" : "23514",
+      "updateRejected" : true
+    },
+    "observed" : {
+      "updateSqlState" : "23514",
+      "truthTable" : [ {
+        "inputVariant" : "PROCESSING|NULL|false",
+        "state" : "PROCESSING",
+        "resultCode" : null,
+        "withPurchase" : false,
+        "expected" : "ACCEPT",
+        "actual" : "ACCEPT",
+        "sqlState" : null
+      }, {
+        "inputVariant" : "COMPLETED|NOT_AVAILABLE|false",
+        "state" : "COMPLETED",
+        "resultCode" : "NOT_AVAILABLE",
+        "withPurchase" : false,
+        "expected" : "ACCEPT",
+        "actual" : "ACCEPT",
+        "sqlState" : null
+      }, {
+        "inputVariant" : "COMPLETED|SUCCESS|true",
+        "state" : "COMPLETED",
+        "resultCode" : "SUCCESS",
+        "withPurchase" : true,
+        "expected" : "ACCEPT",
+        "actual" : "ACCEPT",
+        "sqlState" : null
+      }, {
+        "inputVariant" : "COMPLETED|NULL|false",
+        "state" : "COMPLETED",
+        "resultCode" : null,
+        "withPurchase" : false,
+        "expected" : "REJECT",
+        "actual" : "REJECT",
+        "sqlState" : "23514"
+      }, {
+        "inputVariant" : "COMPLETED|NULL|true",
+        "state" : "COMPLETED",
+        "resultCode" : null,
+        "withPurchase" : true,
+        "expected" : "REJECT",
+        "actual" : "REJECT",
+        "sqlState" : "23514"
+      }, {
+        "inputVariant" : "COMPLETED|SUCCESS|false",
+        "state" : "COMPLETED",
+        "resultCode" : "SUCCESS",
+        "withPurchase" : false,
+        "expected" : "REJECT",
+        "actual" : "REJECT",
+        "sqlState" : "23514"
+      }, {
+        "inputVariant" : "COMPLETED|NOT_AVAILABLE|true",
+        "state" : "COMPLETED",
+        "resultCode" : "NOT_AVAILABLE",
+        "withPurchase" : true,
+        "expected" : "REJECT",
+        "actual" : "REJECT",
+        "sqlState" : "23514"
+      }, {
+        "inputVariant" : "PROCESSING|SUCCESS|true",
+        "state" : "PROCESSING",
+        "resultCode" : "SUCCESS",
+        "withPurchase" : true,
+        "expected" : "REJECT",
+        "actual" : "REJECT",
+        "sqlState" : "23514"
+      } ],
+      "rowIntactAfterUpdateFailure" : true,
+      "updateRejected" : true
+    },
+    "assertionsPassed" : true
+  }, {
+    "caseId" : "MG3",
+    "description" : "Migration fail due to legacy malformed data, DDL rollback, and clean retry",
+    "schema" : "mg3_schema",
+    "expected" : {
+      "retrySuccess" : true,
+      "oldConstraintRestored" : true,
+      "v6HistoryCountAfterFailure" : 0,
+      "migrationFailureSqlState" : "23514"
+    },
+    "observed" : {
+      "migrationFailureSqlState" : "23514",
+      "oldConstraintRestored" : true,
+      "v5ConstraintDef" : "CHECK (((((state)::text = 'PROCESSING'::text) AND (result_code IS NULL) AND (purchase_id IS NULL)) OR (((state)::text = 'COMPLETED'::text) AND ((((result_code)::text = 'SUCCESS'::text) AND (purchase_id IS NOT NULL)) OR (((result_code)::text = 'NOT_AVAILABLE'::text) AND (purchase_id IS NULL))))))",
+      "restoredConstraintDef" : "CHECK (((((state)::text = 'PROCESSING'::text) AND (result_code IS NULL) AND (purchase_id IS NULL)) OR (((state)::text = 'COMPLETED'::text) AND ((((result_code)::text = 'SUCCESS'::text) AND (purchase_id IS NOT NULL)) OR (((result_code)::text = 'NOT_AVAILABLE'::text) AND (purchase_id IS NULL))))))",
+      "v6HistoryCountAfterFailure" : 0,
+      "historyBefore" : [ {
+        "installed_rank" : 1,
+        "version" : "1",
+        "description" : "create lab entry table",
+        "type" : "SQL",
+        "script" : "V1__create_lab_entry_table.sql",
+        "checksum" : -1491295416,
+        "success" : true
+      }, {
+        "installed_rank" : 2,
+        "version" : "2",
+        "description" : "seed demo entries",
+        "type" : "SQL",
+        "script" : "V2__seed_demo_entries.sql",
+        "checksum" : -1300216155,
+        "success" : true
+      }, {
+        "installed_rank" : 3,
+        "version" : "3",
+        "description" : "create market tables",
+        "type" : "SQL",
+        "script" : "V3__create_market_tables.sql",
+        "checksum" : -2106612530,
+        "success" : true
+      }, {
+        "installed_rank" : 4,
+        "version" : "4",
+        "description" : "add market stock version",
+        "type" : "SQL",
+        "script" : "V4__add_market_stock_version.sql",
+        "checksum" : -1537607967,
+        "success" : true
+      }, {
+        "installed_rank" : 5,
+        "version" : "5",
+        "description" : "create market idempotency",
+        "type" : "SQL",
+        "script" : "V5__create_market_idempotency.sql",
+        "checksum" : -1349134787,
+        "success" : true
+      } ],
+      "historyAfter" : [ {
+        "installed_rank" : 1,
+        "version" : "1",
+        "description" : "create lab entry table",
+        "type" : "SQL",
+        "script" : "V1__create_lab_entry_table.sql",
+        "checksum" : -1491295416,
+        "success" : true
+      }, {
+        "installed_rank" : 2,
+        "version" : "2",
+        "description" : "seed demo entries",
+        "type" : "SQL",
+        "script" : "V2__seed_demo_entries.sql",
+        "checksum" : -1300216155,
+        "success" : true
+      }, {
+        "installed_rank" : 3,
+        "version" : "3",
+        "description" : "create market tables",
+        "type" : "SQL",
+        "script" : "V3__create_market_tables.sql",
+        "checksum" : -2106612530,
+        "success" : true
+      }, {
+        "installed_rank" : 4,
+        "version" : "4",
+        "description" : "add market stock version",
+        "type" : "SQL",
+        "script" : "V4__add_market_stock_version.sql",
+        "checksum" : -1537607967,
+        "success" : true
+      }, {
+        "installed_rank" : 5,
+        "version" : "5",
+        "description" : "create market idempotency",
+        "type" : "SQL",
+        "script" : "V5__create_market_idempotency.sql",
+        "checksum" : -1349134787,
+        "success" : true
+      } ],
+      "rowsBefore" : {
+        "065a9884-b8e7-4545-b5b5-4750e7f454ab:faaff9b3-ba8c-4e0c-baec-a0d1f0d80217" : "POTION_3|1|fp_valid|COMPLETED|SUCCESS|0d3faeba-5187-4d27-ba9a-879790eecfc1",
+        "44a698f9-06c9-467c-8955-996f2e39df08:62a18e1a-7663-4c61-8a8c-3e4d5b62f6ce" : "POTION_3|1|fp_mal|COMPLETED|null|null"
+      },
+      "rowsAfter" : {
+        "065a9884-b8e7-4545-b5b5-4750e7f454ab:faaff9b3-ba8c-4e0c-baec-a0d1f0d80217" : "POTION_3|1|fp_valid|COMPLETED|SUCCESS|0d3faeba-5187-4d27-ba9a-879790eecfc1",
+        "44a698f9-06c9-467c-8955-996f2e39df08:62a18e1a-7663-4c61-8a8c-3e4d5b62f6ce" : "POTION_3|1|fp_mal|COMPLETED|null|null"
+      },
+      "v6FileHashUnchanged" : true,
+      "v6FileHash" : "14026d2a5db5af82b939af9607472fcb75c394d137c47a87d2b2d39ab85ec22b",
+      "retrySuccess" : true,
+      "finalHistoryCount" : 6
+    },
+    "assertionsPassed" : true
+  } ]
+}

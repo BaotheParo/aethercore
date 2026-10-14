@@ -171,6 +171,30 @@ public final class TestJwtSupport {
         return signToken(claims, (RSAPrivateKey) TEST_KEY_PAIR.getPrivate());
     }
 
+        public static String createTokenWithoutRolesClaim(UUID callerId) {
+        JWTClaimsSet claims = new JWTClaimsSet.Builder()
+                .subject(callerId.toString())
+                .issuer(DEFAULT_ISSUER)
+                .audience(DEFAULT_AUDIENCE)
+                .issueTime(new Date())
+                .expirationTime(Date.from(Instant.now().plusSeconds(3600)))
+                .build();
+        return signToken(claims, (RSAPrivateKey) TEST_KEY_PAIR.getPrivate());
+    }
+
+    public static String createTokenWithSubWhitespace(UUID callerId, List<String> roles) {
+        return createTokenWithInvalidSub("  " + callerId + "  ", roles);
+    }
+
+    public static String createTokenWithShortenedSub(UUID callerId, List<String> roles) {
+        String shortened = callerId.toString().substring(0, 35);
+        return createTokenWithInvalidSub(shortened, roles);
+    }
+
+    public static String createTokenWithNonStringRoleElement(UUID callerId) {
+        return createTokenWithRolesPayload(callerId, List.of("TRADER", 999));
+    }
+
     private static String signToken(JWTClaimsSet claims, RSAPrivateKey privateKey) {
         try {
             JWSSigner signer = new RSASSASigner(privateKey);

@@ -1,0 +1,30 @@
+{
+  "runId": "prompt24-20261014-172137-be44a2",
+  "prompt": "prompt24",
+  "timestamp": "2026-10-14T17:21:37.397826+07:00",
+  "gitHead": "68bd59e369f3ae343c619eeba6bb8fd13624eef2",
+  "workingTreeDirty": true,
+  "command": "C:\\Program Files\\Apache\\maven\\apache-maven-3.9.12\\bin\\mvn.CMD clean test -Dlab.runId=prompt24-20261014-172137-be44a2 -Dlab.evidenceDir=D:\\Project CV\\INTERVIEW\\aethercore\\backend-app\\target\\lab-evidence\\prompt24-20261014-172137-be44a2",
+  "exitCode": 0,
+  "runtimeInfo": {
+    "java": "java version \"22\" 2024-03-19",
+    "maven": "Apache Maven 3.9.12 (848fbb4bf2d427b72bdb2471c22fced7ebd9a7a1)",
+    "docker": "Docker Server 29.5.3"
+  },
+  "observationsValidated": [
+    "proxy-observations.json",
+    "propagation-observations.json",
+    "deadlock-observations.json",
+    "fetch-observations.json",
+    "pagination-observations.json",
+    "query-plan-observations.json",
+    "keyset-pagination-observations.json",
+    "predicate-index-observations.json",
+    "idempotency-observations.json",
+    "migration-observations.json",
+    "nontransactional-index-observations.json",
+    "security-observations.json",
+    "method-security-observations.json",
+    "method-security-proxy-observations.json"
+  ]
+}

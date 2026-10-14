@@ -1,0 +1,49 @@
+{
+  "schemaVersion" : "1.0.0",
+  "runId" : "prompt24-20261014-172137-be44a2",
+  "generatedAt" : "2026-10-14T10:23:00.615378500Z",
+  "proxyMechanism" : "SPRING_CGLIB_PROXY",
+  "methodSecurityInterceptor" : "AuthorizationManagerBeforeMethodInterceptor",
+  "subcaseCount" : 4,
+  "subcases" : [ {
+    "variant" : "direct_proxy_call_viewer_denied",
+    "invocationPath" : "EXTERNAL_BEAN_PROXY",
+    "role" : "ROLE_VIEWER",
+    "targetMethod" : "guardedAction",
+    "outcome" : "AccessDeniedException",
+    "counterBefore" : 0,
+    "counterAfter" : 0,
+    "intercepted" : true,
+    "stateUnchanged" : true
+  }, {
+    "variant" : "self_invocation_internal_call_viewer_bypassed",
+    "invocationPath" : "INTERNAL_THIS_CALL",
+    "role" : "ROLE_VIEWER",
+    "targetMethod" : "callGuardedInternally",
+    "outcome" : "SUCCESS_BYPASS",
+    "counterBefore" : 0,
+    "counterAfter" : 1,
+    "intercepted" : false,
+    "stateUnchanged" : false
+  }, {
+    "variant" : "external_wrapper_call_viewer_denied",
+    "invocationPath" : "EXTERNAL_WRAPPER_PROXY",
+    "role" : "ROLE_VIEWER",
+    "targetMethod" : "callGuardedViaProxy",
+    "outcome" : "AccessDeniedException",
+    "counterBefore" : 1,
+    "counterAfter" : 1,
+    "intercepted" : true,
+    "stateUnchanged" : true
+  }, {
+    "variant" : "direct_proxy_call_trader_success",
+    "invocationPath" : "EXTERNAL_BEAN_PROXY",
+    "role" : "ROLE_TRADER",
+    "targetMethod" : "guardedAction",
+    "outcome" : "SUCCESS_AUTHORIZED",
+    "counterBefore" : 0,
+    "counterAfter" : 1,
+    "intercepted" : false,
+    "stateUnchanged" : false
+  } ]
+}

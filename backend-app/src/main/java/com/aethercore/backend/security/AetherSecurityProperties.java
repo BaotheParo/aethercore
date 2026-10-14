@@ -8,7 +8,8 @@ import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
 /**
- * Immutable properties for JWT validation and trust establishment.
+ * Configuration properties for JWT validation and trust establishment.
+ * Binds properties prefixed by 'aethercore.security.jwt'.
  * Fails fast if required public key configuration is absent.
  */
 @ConfigurationProperties(prefix = "aethercore.security.jwt")
@@ -66,7 +67,10 @@ public class AetherSecurityProperties {
             String sanitizedPem = publicKeyPem
                     .replace("-----BEGIN PUBLIC KEY-----", "")
                     .replace("-----END PUBLIC KEY-----", "")
-                    .replaceAll("\\s+", "");
+                    .replace("\r", "")
+                    .replace("\n", "")
+                    .replace(" ", "")
+                    .trim();
             byte[] decoded = Base64.getDecoder().decode(sanitizedPem);
             KeyFactory keyFactory = KeyFactory.getInstance("RSA");
             return (RSAPublicKey) keyFactory.generatePublic(new X509EncodedKeySpec(decoded));

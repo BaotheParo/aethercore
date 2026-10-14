@@ -146,12 +146,14 @@ class EvidenceCollector:
                 'predicate-index-observations.json': [f"IP{i}" for i in range(1, 5)],
                 'idempotency-observations.json': [f"ID{i}" for i in range(1, 8)]
             }
-            if self.prompt in ("prompt20", "prompt21", "prompt22") or os.path.exists(os.path.join(staging_dir, 'migration-observations.json')):
+            if self.prompt in ("prompt20", "prompt21", "prompt22", "prompt24") or os.path.exists(os.path.join(staging_dir, 'migration-observations.json')):
                 required_sets['migration-observations.json'] = ["MG1", "MG2", "MG3"]
-            if self.prompt in ("prompt21", "prompt22") or os.path.exists(os.path.join(staging_dir, 'nontransactional-index-observations.json')):
+            if self.prompt in ("prompt21", "prompt22", "prompt24") or os.path.exists(os.path.join(staging_dir, 'nontransactional-index-observations.json')):
                 required_sets['nontransactional-index-observations.json'] = ["NC1", "NC2", "NC3"]
-            if self.prompt == "prompt22" or os.path.exists(os.path.join(staging_dir, 'security-observations.json')):
+            if self.prompt in ("prompt22", "prompt24") or os.path.exists(os.path.join(staging_dir, 'security-observations.json')):
                 required_sets['security-observations.json'] = [f"SEC{i}" for i in range(1, 10)]
+            if self.prompt == "prompt24" or os.path.exists(os.path.join(staging_dir, 'method-security-observations.json')):
+                required_sets['method-security-observations.json'] = ["MS1", "MS2"]
 
         validated = []
         for filename, expected_cases in required_sets.items():
@@ -206,6 +208,8 @@ class EvidenceCollector:
                     self._validate_nontransactional_index_scenario(case_id, s)
                 elif filename == 'security-observations.json':
                     self._validate_security_scenario(case_id, s)
+                elif filename == 'method-security-observations.json':
+                    self._validate_method_security_scenario(case_id, s)
 
             for exp in expected_cases:
                 if exp not in found_cases:
@@ -213,7 +217,24 @@ class EvidenceCollector:
 
             validated.append(filename)
 
+        if self.prompt == "prompt24" or os.path.exists(os.path.join(staging_dir, 'method-security-proxy-observations.json')):
+            proxy_obs_path = os.path.join(staging_dir, 'method-security-proxy-observations.json')
+            if not os.path.exists(proxy_obs_path):
+                raise ValidationError(f"Missing required observation file: method-security-proxy-observations.json in {staging_dir}")
+            self._validate_method_security_proxy_observations(proxy_obs_path, run_id)
+            validated.append('method-security-proxy-observations.json')
+
         return validated
+
+    def _validate_snapshot_dict(self, var, snap, snap_type):
+        if not isinstance(snap, dict):
+            raise ValidationError(f"Subcase '{var}' {snap_type} snapshot must be a dict")
+        for field in ["stockAvailable", "stockVersion", "purchaseCount", "purchaseSumQuantity", "idempotencyRowCount"]:
+            if field not in snap:
+                raise ValidationError(f"Subcase '{var}' {snap_type} snapshot missing field '{field}'")
+            val = snap[field]
+            if not _is_strict_int(val):
+                raise ValidationError(f"Subcase '{var}' {snap_type} snapshot field '{field}' must be a strict integer, got {type(val).__name__} ({val})")
 
     def _validate_fetch_scenario(self, case_id, s):
         for req_field in ["datasetId", "strategy", "orderCount", "distinctBuyerCount",
@@ -829,6 +850,8 @@ class EvidenceCollector:
             var = sc.get("variant")
             if not var:
                 raise ValidationError(f"Scenario {case_id} subcase missing 'variant' field")
+            if var in subcases_by_variant:
+                raise ValidationError(f"Scenario {case_id} contains duplicate variant '{var}'")
             subcases_by_variant[var] = sc
             obs_st = sc.get("observedStatus")
             exp_st = sc.get("expectedStatus")
@@ -836,6 +859,24 @@ class EvidenceCollector:
                 raise ValidationError(f"Scenario {case_id} subcase '{var}' statuses must be integers")
             if obs_st != exp_st:
                 raise ValidationError(f"Scenario {case_id} subcase '{var}' observedStatus ({obs_st}) != expectedStatus ({exp_st})")
+
+            before = sc.get("before")
+            after = sc.get("after")
+            state_unchanged = sc.get("stateUnchanged")
+
+            if before is not None and after is not None:
+                self._validate_snapshot_dict(var, before, "before")
+                self._validate_snapshot_dict(var, after, "after")
+                if state_unchanged is True:
+                    for fld in ["stockAvailable", "stockVersion", "purchaseCount", "purchaseSumQuantity", "idempotencyRowCount"]:
+                        if before[fld] != after[fld]:
+                            raise ValidationError(f"Scenario {case_id} subcase '{var}' claims stateUnchanged=True but raw snapshots differ on '{fld}': before={before[fld]}, after={after[fld]}")
+                elif state_unchanged is False:
+                    diffs = [fld for fld in ["stockAvailable", "stockVersion", "purchaseCount", "purchaseSumQuantity", "idempotencyRowCount"] if before[fld] != after[fld]]
+                    if len(diffs) == 0:
+                        raise ValidationError(f"Scenario {case_id} subcase '{var}' claims stateUnchanged=False but snapshots are identical")
+            elif before is not None or after is not None:
+                raise ValidationError(f"Scenario {case_id} subcase '{var}' snapshot before/after is incomplete")
 
         if case_id == "SEC1":
             for exp_var in ["missing_token", "malformed_token", "wrong_key_b"]:
@@ -1251,6 +1292,134 @@ REACTOR TOTAL: {total_reactor} Tests Run | {total_failures} Failures | {total_er
         print(f"Successfully promoted evidence bundle to: {dest_dir}")
         print("EVIDENCE COLLECTION VERIFIED: SUCCESS")
         return dest_dir
+
+
+    def _validate_method_security_scenario(self, case_id, s):
+        subcases = s.get("subcases")
+        if not isinstance(subcases, list) or len(subcases) == 0:
+            raise ValidationError(f"Scenario {case_id} must contain a non-empty list of 'subcases'")
+
+        subcase_count = s.get("subcaseCount")
+        if not _is_strict_int(subcase_count) or subcase_count != len(subcases):
+            raise ValidationError(f"Scenario {case_id} subcaseCount must match length of subcases list")
+
+        subcases_by_variant = {}
+        for sc in subcases:
+            var = sc.get("variant")
+            if not var:
+                raise ValidationError(f"Scenario {case_id} subcase missing 'variant' field")
+            if var in subcases_by_variant:
+                raise ValidationError(f"Scenario {case_id} contains duplicate variant '{var}'")
+            subcases_by_variant[var] = sc
+
+            before = sc.get("before")
+            after = sc.get("after")
+            state_unchanged = sc.get("stateUnchanged")
+
+            if before is None or after is None:
+                raise ValidationError(f"Scenario {case_id} subcase '{var}' requires both before and after snapshots")
+            self._validate_snapshot_dict(var, before, "before")
+            self._validate_snapshot_dict(var, after, "after")
+
+            if state_unchanged is True:
+                for fld in ["stockAvailable", "stockVersion", "purchaseCount", "purchaseSumQuantity", "idempotencyRowCount"]:
+                    if before[fld] != after[fld]:
+                        raise ValidationError(f"Scenario {case_id} subcase '{var}' claims stateUnchanged=True but raw snapshots differ on '{fld}': before={before[fld]}, after={after[fld]}")
+            elif state_unchanged is False:
+                diffs = [fld for fld in ["stockAvailable", "stockVersion", "purchaseCount", "purchaseSumQuantity", "idempotencyRowCount"] if before[fld] != after[fld]]
+                if len(diffs) == 0:
+                    raise ValidationError(f"Scenario {case_id} subcase '{var}' claims stateUnchanged=False but snapshots are identical")
+
+        if case_id == "MS1":
+            for exp_var in ["direct_call_unauthenticated_denied", "direct_call_viewer_role_access_denied", "direct_call_trader_role_authorized_success"]:
+                if exp_var not in subcases_by_variant:
+                    raise ValidationError(f"Scenario MS1 missing required subcase '{exp_var}'")
+            unauth = subcases_by_variant["direct_call_unauthenticated_denied"]
+            if unauth.get("stateUnchanged") is not True:
+                raise ValidationError("Scenario MS1 unauthenticated call must have stateUnchanged=True")
+            viewer = subcases_by_variant["direct_call_viewer_role_access_denied"]
+            if viewer.get("stateUnchanged") is not True:
+                raise ValidationError("Scenario MS1 viewer call must have stateUnchanged=True")
+            trader = subcases_by_variant["direct_call_trader_role_authorized_success"]
+            if trader.get("stateUnchanged") is not False:
+                raise ValidationError("Scenario MS1 trader call must have stateUnchanged=False")
+            if trader.get("outcome") != "SUCCESS":
+                raise ValidationError("Scenario MS1 trader call outcome must be SUCCESS")
+
+        elif case_id == "MS2":
+            req_vars = [
+                "caller_a_purchase_key_k",
+                "caller_b_query_key_k_before_purchase_empty",
+                "caller_b_purchase_same_key_k_distinct_id",
+                "isolated_reads_for_both_callers_same_key",
+                "caller_a_replay_same_key_cached_outcome"
+            ]
+            for exp_var in req_vars:
+                if exp_var not in subcases_by_variant:
+                    raise ValidationError(f"Scenario MS2 missing required subcase '{exp_var}'")
+            sc_a = subcases_by_variant["caller_a_purchase_key_k"]
+            sc_b = subcases_by_variant["caller_b_purchase_same_key_k_distinct_id"]
+            if not sc_a.get("purchaseId") or not sc_b.get("purchaseId"):
+                raise ValidationError("Scenario MS2 purchases must contain non-null purchaseId")
+            if sc_a.get("purchaseId") == sc_b.get("purchaseId"):
+                raise ValidationError("Scenario MS2 callers A and B must receive distinct purchaseIds for same key")
+
+    def _validate_method_security_proxy_observations(self, fpath, run_id):
+        try:
+            with open(fpath, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except Exception as e:
+            raise ValidationError(f"Invalid JSON in method-security-proxy-observations.json: {e}")
+
+        obs_run_id = data.get("runId")
+        if run_id and obs_run_id != run_id:
+            raise ValidationError(f"Mismatched runId in method-security-proxy-observations.json: expected {run_id}, got {obs_run_id}")
+
+        if data.get("proxyMechanism") != "SPRING_CGLIB_PROXY":
+            raise ValidationError(f"method-security-proxy-observations.json proxyMechanism must be 'SPRING_CGLIB_PROXY'")
+        if data.get("methodSecurityInterceptor") != "AuthorizationManagerBeforeMethodInterceptor":
+            raise ValidationError(f"method-security-proxy-observations.json methodSecurityInterceptor must be 'AuthorizationManagerBeforeMethodInterceptor'")
+
+        subcases = data.get("subcases")
+        if not isinstance(subcases, list) or len(subcases) == 0:
+            raise ValidationError("method-security-proxy-observations.json must contain non-empty 'subcases'")
+
+        subcases_by_variant = {}
+        for sc in subcases:
+            var = sc.get("variant")
+            if not var:
+                raise ValidationError("Proxy subcase missing 'variant' field")
+            if var in subcases_by_variant:
+                raise ValidationError(f"Proxy subcases contain duplicate variant '{var}'")
+            subcases_by_variant[var] = sc
+
+            cb = sc.get("counterBefore")
+            ca = sc.get("counterAfter")
+            if not _is_strict_int(cb) or not _is_strict_int(ca):
+                raise ValidationError(f"Proxy subcase '{var}' counters must be strict integers")
+
+        for req_var in ["direct_proxy_call_viewer_denied", "self_invocation_internal_call_viewer_bypassed", "external_wrapper_call_viewer_denied", "direct_proxy_call_trader_success"]:
+            if req_var not in subcases_by_variant:
+                raise ValidationError(f"Proxy observations missing required subcase '{req_var}'")
+
+        # 1. Denied external calls must NOT increment counter
+        v_denied = subcases_by_variant["direct_proxy_call_viewer_denied"]
+        if v_denied["counterBefore"] != v_denied["counterAfter"] or v_denied.get("intercepted") is not True:
+            raise ValidationError("direct_proxy_call_viewer_denied must not increment counter and must be intercepted")
+
+        w_denied = subcases_by_variant["external_wrapper_call_viewer_denied"]
+        if w_denied["counterBefore"] != w_denied["counterAfter"] or w_denied.get("intercepted") is not True:
+            raise ValidationError("external_wrapper_call_viewer_denied must not increment counter and must be intercepted")
+
+        # 2. Internal self-invocation MUST bypass and increment counter
+        bypassed = subcases_by_variant["self_invocation_internal_call_viewer_bypassed"]
+        if bypassed["counterAfter"] != bypassed["counterBefore"] + 1 or bypassed.get("intercepted") is not False:
+            raise ValidationError("self_invocation_internal_call_viewer_bypassed must increment counter (+1) and must NOT be intercepted")
+
+        # 3. Authorized trader call MUST succeed and increment counter
+        trader = subcases_by_variant["direct_proxy_call_trader_success"]
+        if trader["counterAfter"] != trader["counterBefore"] + 1 or trader.get("outcome") != "SUCCESS_AUTHORIZED":
+            raise ValidationError("direct_proxy_call_trader_success must increment counter (+1) and have outcome SUCCESS_AUTHORIZED")
 
 def main():
     parser = argparse.ArgumentParser(description="AetherCore Lab Evidence Collector")

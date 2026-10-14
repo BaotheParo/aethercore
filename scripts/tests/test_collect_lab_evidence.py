@@ -1833,5 +1833,299 @@ class TestEvidenceCollector(unittest.TestCase):
             )
         self.assertIn("no session retention", str(cm.exception))
 
+
+    def test_security_observations_duplicate_variant_and_snapshot_mutations(self):
+        obs_dir = os.path.join(self.temp_dir, "sec_mutations")
+        os.makedirs(obs_dir, exist_ok=True)
+        file_path = os.path.join(obs_dir, "security-observations.json")
+
+        base_payload = {
+            "schemaVersion": "1.0.0",
+            "runId": "run-sec-mut",
+            "generatedAt": "2026-10-14T12:00:00Z",
+            "scenarioCount": 9,
+            "scenarios": [
+                {
+                    "caseId": f"SEC{i}",
+                    "scenarioId": f"SEC{i}",
+                    "subcaseCount": 1,
+                    "subcases": [
+                        {
+                            "variant": "v1",
+                            "expectedStatus": 200,
+                            "observedStatus": 200,
+                            "stateUnchanged": True,
+                            "before": {"stockAvailable": 10, "stockVersion": 0, "purchaseCount": 0, "purchaseSumQuantity": 0, "idempotencyRowCount": 0},
+                            "after": {"stockAvailable": 10, "stockVersion": 0, "purchaseCount": 0, "purchaseSumQuantity": 0, "idempotencyRowCount": 0}
+                        }
+                    ]
+                }
+                for i in range(1, 10)
+            ]
+        }
+
+        # 1. Duplicate variant in scenario SEC1 raises
+        dup_payload = copy.deepcopy(base_payload)
+        dup_payload["scenarios"][0]["subcases"].append(copy.deepcopy(dup_payload["scenarios"][0]["subcases"][0]))
+        dup_payload["scenarios"][0]["subcaseCount"] = 2
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(dup_payload, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-sec-mut",
+                required_sets={"security-observations.json": ["SEC1"]}
+            )
+        self.assertIn("duplicate variant", str(cm.exception))
+
+        # 2. Corrupted snapshot: stateUnchanged=True but after differs (e.g. -99)
+        diff_payload = copy.deepcopy(base_payload)
+        diff_payload["scenarios"][0]["subcases"][0]["after"]["stockAvailable"] = -99
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(diff_payload, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-sec-mut",
+                required_sets={"security-observations.json": ["SEC1"]}
+            )
+        self.assertIn("raw snapshots differ", str(cm.exception))
+
+        # 3. Missing snapshot when stateUnchanged=True
+        missing_snap_payload = copy.deepcopy(base_payload)
+        missing_snap_payload["scenarios"][0]["subcases"][0]["before"] = None
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(missing_snap_payload, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-sec-mut",
+                required_sets={"security-observations.json": ["SEC1"]}
+            )
+        self.assertIn("snapshot before/after is incomplete", str(cm.exception))
+
+        # 4. Boolean masquerading as integer in snapshot
+        bool_snap_payload = copy.deepcopy(base_payload)
+        bool_snap_payload["scenarios"][0]["subcases"][0]["before"]["stockAvailable"] = True
+        bool_snap_payload["scenarios"][0]["subcases"][0]["after"]["stockAvailable"] = True
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(bool_snap_payload, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-sec-mut",
+                required_sets={"security-observations.json": ["SEC1"]}
+            )
+        self.assertIn("must be a strict integer", str(cm.exception))
+
+    def test_method_security_observations_validation(self):
+        obs_dir = os.path.join(self.temp_dir, "method_sec_obs")
+        os.makedirs(obs_dir, exist_ok=True)
+        file_path = os.path.join(obs_dir, "method-security-observations.json")
+
+        snap0 = {"stockAvailable": 10, "stockVersion": 0, "purchaseCount": 0, "purchaseSumQuantity": 0, "idempotencyRowCount": 0}
+        snap1 = {"stockAvailable": 8, "stockVersion": 1, "purchaseCount": 1, "purchaseSumQuantity": 2, "idempotencyRowCount": 1}
+        snap2 = {"stockAvailable": 6, "stockVersion": 2, "purchaseCount": 2, "purchaseSumQuantity": 4, "idempotencyRowCount": 2}
+
+        valid_ms_payload = {
+            "schemaVersion": "1.0.0",
+            "runId": "run-ms-1",
+            "generatedAt": "2026-10-14T12:00:00Z",
+            "scenarioCount": 2,
+            "scenarios": [
+                {
+                    "caseId": "MS1",
+                    "scenarioId": "MS1",
+                    "subcaseCount": 3,
+                    "subcases": [
+                        {
+                            "variant": "direct_call_unauthenticated_denied",
+                            "invocationType": "DIRECT_BEAN",
+                            "role": "ANONYMOUS",
+                            "targetMethod": "purchase",
+                            "observedException": "AuthenticationCredentialsNotFoundException",
+                            "before": snap0,
+                            "after": snap0,
+                            "stateUnchanged": True
+                        },
+                        {
+                            "variant": "direct_call_viewer_role_access_denied",
+                            "invocationType": "DIRECT_BEAN",
+                            "role": "ROLE_VIEWER",
+                            "targetMethod": "purchase",
+                            "observedException": "AccessDeniedException",
+                            "before": snap0,
+                            "after": snap0,
+                            "stateUnchanged": True
+                        },
+                        {
+                            "variant": "direct_call_trader_role_authorized_success",
+                            "invocationType": "DIRECT_BEAN",
+                            "role": "ROLE_TRADER",
+                            "targetMethod": "purchase",
+                            "outcome": "SUCCESS",
+                            "purchaseId": "11111111-1111-1111-1111-111111111111",
+                            "before": snap0,
+                            "after": snap1,
+                            "stateUnchanged": False
+                        }
+                    ]
+                },
+                {
+                    "caseId": "MS2",
+                    "scenarioId": "MS2",
+                    "subcaseCount": 5,
+                    "subcases": [
+                        {
+                            "variant": "caller_a_purchase_key_k",
+                            "callerId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                            "outcome": "SUCCESS",
+                            "purchaseId": "11111111-1111-1111-1111-111111111111",
+                            "replayed": False,
+                            "before": snap0,
+                            "after": snap1,
+                            "stateUnchanged": False
+                        },
+                        {
+                            "variant": "caller_b_query_key_k_before_purchase_empty",
+                            "callerId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                            "found": False,
+                            "before": snap1,
+                            "after": snap1,
+                            "stateUnchanged": True
+                        },
+                        {
+                            "variant": "caller_b_purchase_same_key_k_distinct_id",
+                            "callerId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                            "outcome": "SUCCESS",
+                            "purchaseId": "22222222-2222-2222-2222-222222222222",
+                            "replayed": False,
+                            "before": snap1,
+                            "after": snap2,
+                            "stateUnchanged": False
+                        },
+                        {
+                            "variant": "isolated_reads_for_both_callers_same_key",
+                            "callerAPurchaseId": "11111111-1111-1111-1111-111111111111",
+                            "callerBPurchaseId": "22222222-2222-2222-2222-222222222222",
+                            "before": snap2,
+                            "after": snap2,
+                            "stateUnchanged": True
+                        },
+                        {
+                            "variant": "caller_a_replay_same_key_cached_outcome",
+                            "callerId": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+                            "outcome": "SUCCESS",
+                            "purchaseId": "11111111-1111-1111-1111-111111111111",
+                            "replayed": True,
+                            "before": snap2,
+                            "after": snap2,
+                            "stateUnchanged": True
+                        }
+                    ]
+                }
+            ]
+        }
+
+        # Positive control
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(valid_ms_payload, f)
+        validated = self.collector.validate_observations(
+            obs_dir, run_id="run-ms-1",
+            required_sets={"method-security-observations.json": ["MS1", "MS2"]}
+        )
+        self.assertIn("method-security-observations.json", validated)
+
+        # Negative mutation: callers A and B receive identical purchaseId
+        mut_payload = copy.deepcopy(valid_ms_payload)
+        mut_payload["scenarios"][1]["subcases"][2]["purchaseId"] = "11111111-1111-1111-1111-111111111111"
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(mut_payload, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-ms-1",
+                required_sets={"method-security-observations.json": ["MS1", "MS2"]}
+            )
+        self.assertIn("distinct purchaseIds", str(cm.exception))
+
+    def test_method_security_proxy_observations_validation(self):
+        obs_dir = os.path.join(self.temp_dir, "proxy_obs")
+        os.makedirs(obs_dir, exist_ok=True)
+        file_path = os.path.join(obs_dir, "method-security-proxy-observations.json")
+
+        valid_proxy_payload = {
+            "schemaVersion": "1.0.0",
+            "runId": "run-proxy-1",
+            "generatedAt": "2026-10-14T12:00:00Z",
+            "proxyMechanism": "SPRING_CGLIB_PROXY",
+            "methodSecurityInterceptor": "AuthorizationManagerBeforeMethodInterceptor",
+            "subcaseCount": 4,
+            "subcases": [
+                {
+                    "variant": "direct_proxy_call_viewer_denied",
+                    "invocationPath": "EXTERNAL_BEAN_PROXY",
+                    "role": "ROLE_VIEWER",
+                    "targetMethod": "guardedAction",
+                    "outcome": "AccessDeniedException",
+                    "counterBefore": 0,
+                    "counterAfter": 0,
+                    "intercepted": True,
+                    "stateUnchanged": True
+                },
+                {
+                    "variant": "self_invocation_internal_call_viewer_bypassed",
+                    "invocationPath": "INTERNAL_THIS_CALL",
+                    "role": "ROLE_VIEWER",
+                    "targetMethod": "callGuardedInternally",
+                    "outcome": "SUCCESS_BYPASS",
+                    "counterBefore": 0,
+                    "counterAfter": 1,
+                    "intercepted": False,
+                    "stateUnchanged": False
+                },
+                {
+                    "variant": "external_wrapper_call_viewer_denied",
+                    "invocationPath": "EXTERNAL_WRAPPER_PROXY",
+                    "role": "ROLE_VIEWER",
+                    "targetMethod": "callGuardedViaProxy",
+                    "outcome": "AccessDeniedException",
+                    "counterBefore": 1,
+                    "counterAfter": 1,
+                    "intercepted": True,
+                    "stateUnchanged": True
+                },
+                {
+                    "variant": "direct_proxy_call_trader_success",
+                    "invocationPath": "EXTERNAL_BEAN_PROXY",
+                    "role": "ROLE_TRADER",
+                    "targetMethod": "guardedAction",
+                    "outcome": "SUCCESS_AUTHORIZED",
+                    "counterBefore": 0,
+                    "counterAfter": 1,
+                    "intercepted": False,
+                    "stateUnchanged": False
+                }
+            ]
+        }
+
+        # Positive control
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(valid_proxy_payload, f)
+        self.collector._validate_method_security_proxy_observations(file_path, "run-proxy-1")
+
+        # Negative mutation: direct proxy denied increments counter
+        mut1 = copy.deepcopy(valid_proxy_payload)
+        mut1["subcases"][0]["counterAfter"] = 1
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(mut1, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector._validate_method_security_proxy_observations(file_path, "run-proxy-1")
+        self.assertIn("must not increment counter", str(cm.exception))
+
+        # Negative mutation: internal call does not increment counter
+        mut2 = copy.deepcopy(valid_proxy_payload)
+        mut2["subcases"][1]["counterAfter"] = 0
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(mut2, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector._validate_method_security_proxy_observations(file_path, "run-proxy-1")
+        self.assertIn("must increment counter (+1)", str(cm.exception))
+
 if __name__ == '__main__':
     unittest.main()

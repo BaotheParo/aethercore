@@ -26,7 +26,8 @@ public class MarketPurchaseExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleConflict(IdempotencyConflictException ex) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("error", "IDEMPOTENCY_CONFLICT");
-        body.put("message", ex.getMessage());
+        // Safe, stable client message without leaking internal fingerprint details
+        body.put("message", "Idempotency conflict: key has already been used for a different request payload");
         return ResponseEntity.status(HttpStatus.CONFLICT).body(body);
     }
 
@@ -39,11 +40,11 @@ public class MarketPurchaseExceptionHandler {
     }
 
     @ExceptionHandler({
+            InvalidRequestException.class,
             MethodArgumentNotValidException.class,
             HttpMessageNotReadableException.class,
             MethodArgumentTypeMismatchException.class,
-            MissingRequestHeaderException.class,
-            IllegalArgumentException.class
+            MissingRequestHeaderException.class
     })
     public ResponseEntity<Map<String, Object>> handleBadRequest(Exception ex) {
         String detailMessage = ex.getMessage();

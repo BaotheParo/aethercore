@@ -201,6 +201,9 @@ public class MarketSecurityIntegrationTest {
         tokenVariants.put("invalid_sub_non_uuid", TestJwtSupport.createTokenWithInvalidSub("not-a-valid-uuid", List.of("TRADER")));
         tokenVariants.put("roles_as_integer", TestJwtSupport.createTokenWithRolesPayload(callerId, 12345));
         tokenVariants.put("roles_as_string", TestJwtSupport.createTokenWithRolesPayload(callerId, "TRADER"));
+        tokenVariants.put("sub_with_whitespace", TestJwtSupport.createTokenWithSubWhitespace(callerId, List.of("TRADER")));
+        tokenVariants.put("sub_shortened_uuid", TestJwtSupport.createTokenWithShortenedSub(callerId, List.of("TRADER")));
+        tokenVariants.put("roles_array_non_string_element", TestJwtSupport.createTokenWithNonStringRoleElement(callerId));
 
         for (Map.Entry<String, String> entry : tokenVariants.entrySet()) {
             String variantName = entry.getKey();
@@ -283,6 +286,21 @@ public class MarketSecurityIntegrationTest {
         assertThat(afterTrader.stockAvailable()).isEqualTo(beforeTrader.stockAvailable() - 2);
         assertThat(afterTrader.purchaseCount()).isEqualTo(beforeTrader.purchaseCount() + 1);
         subcases.add(recordSubcase("trader_role_success", 200, resTrader, beforeTrader, afterTrader));
+
+        // Subcase 4: Absent roles claim -> 403
+        UUID callerAbsent = UUID.randomUUID();
+        String tokenAbsent = TestJwtSupport.createTokenWithoutRolesClaim(callerAbsent);
+        DbSnapshot beforeAbsent = takeSnapshot(sku);
+        MvcResult resAbsent = mockMvc.perform(post("/api/market/purchases")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenAbsent)
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validBody))
+                .andExpect(status().isForbidden())
+                .andReturn();
+        DbSnapshot afterAbsent = takeSnapshot(sku);
+        assertThat(afterAbsent).isEqualTo(beforeAbsent);
+        subcases.add(recordSubcase("absent_roles_claim", 403, resAbsent, beforeAbsent, afterAbsent));
 
         recordScenario("SEC3", subcases);
     }
@@ -486,22 +504,28 @@ public class MarketSecurityIntegrationTest {
         subcases.add(recordSubcase("caller_b_purchase_same_key_k", 200, resB, snap1, snap2));
 
         // Step 3: Caller A reads key K -> gets purchaseIdA
+        DbSnapshot snap2BeforeReadA = takeSnapshot(sku);
         MvcResult readA = mockMvc.perform(get("/api/market/purchase-requests/" + keyK)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenA))
                 .andExpect(status().isOk())
                 .andReturn();
         JsonNode readJsonA = objectMapper.readTree(readA.getResponse().getContentAsString());
         assertThat(readJsonA.get("purchaseId").asText()).isEqualTo(purchaseIdA.toString());
-        subcases.add(recordSubcase("caller_a_read_k", 200, readA, snap2, snap2));
+        DbSnapshot snap3AfterReadA = takeSnapshot(sku);
+        assertThat(snap3AfterReadA).isEqualTo(snap2BeforeReadA);
+        subcases.add(recordSubcase("caller_a_read_k", 200, readA, snap2BeforeReadA, snap3AfterReadA));
 
         // Step 4: Caller B reads key K -> gets purchaseIdB
+        DbSnapshot snap3BeforeReadB = takeSnapshot(sku);
         MvcResult readB = mockMvc.perform(get("/api/market/purchase-requests/" + keyK)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenB))
                 .andExpect(status().isOk())
                 .andReturn();
         JsonNode readJsonB = objectMapper.readTree(readB.getResponse().getContentAsString());
         assertThat(readJsonB.get("purchaseId").asText()).isEqualTo(purchaseIdB.toString());
-        subcases.add(recordSubcase("caller_b_read_k", 200, readB, snap2, snap2));
+        DbSnapshot snap4AfterReadB = takeSnapshot(sku);
+        assertThat(snap4AfterReadB).isEqualTo(snap3BeforeReadB);
+        subcases.add(recordSubcase("caller_b_read_k", 200, readB, snap3BeforeReadB, snap4AfterReadB));
 
         recordScenario("SEC6", subcases);
     }

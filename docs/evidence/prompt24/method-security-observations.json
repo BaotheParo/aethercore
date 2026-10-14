@@ -1,0 +1,182 @@
+{
+  "schemaVersion" : "1.0.0",
+  "runId" : "prompt24-20261014-172137-be44a2",
+  "generatedAt" : "2026-10-14T10:22:56.128349200Z",
+  "scenarioCount" : 2,
+  "scenarios" : [ {
+    "scenarioId" : "MS1",
+    "caseId" : "MS1",
+    "subcaseCount" : 3,
+    "subcases" : [ {
+      "variant" : "direct_call_unauthenticated_denied",
+      "invocationType" : "DIRECT_BEAN",
+      "role" : "ANONYMOUS",
+      "targetMethod" : "purchase",
+      "observedException" : "AuthenticationCredentialsNotFoundException",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "direct_call_viewer_role_access_denied",
+      "invocationType" : "DIRECT_BEAN",
+      "role" : "ROLE_VIEWER",
+      "targetMethod" : "purchase",
+      "observedException" : "AccessDeniedException",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "direct_call_trader_role_authorized_success",
+      "invocationType" : "DIRECT_BEAN",
+      "role" : "ROLE_TRADER",
+      "targetMethod" : "purchase",
+      "outcome" : "SUCCESS",
+      "purchaseId" : "e7ff3161-f682-49cb-9846-be7f074f2f2b",
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "stateUnchanged" : false
+    } ]
+  }, {
+    "scenarioId" : "MS2",
+    "caseId" : "MS2",
+    "subcaseCount" : 5,
+    "subcases" : [ {
+      "variant" : "caller_a_purchase_key_k",
+      "callerId" : "ce8aa084-cad6-4f8b-87d4-c7bee2f5b13c",
+      "outcome" : "SUCCESS",
+      "purchaseId" : "b06f552b-fd18-4865-b976-5ab2d4c0d037",
+      "replayed" : false,
+      "before" : {
+        "stockAvailable" : 10,
+        "stockVersion" : 0,
+        "purchaseCount" : 0,
+        "purchaseSumQuantity" : 0,
+        "idempotencyRowCount" : 0
+      },
+      "after" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "stateUnchanged" : false
+    }, {
+      "variant" : "caller_b_query_key_k_before_purchase_empty",
+      "callerId" : "3aae11bc-5a4c-4b16-a73a-497ead91173c",
+      "found" : false,
+      "before" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "after" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "caller_b_purchase_same_key_k_distinct_id",
+      "callerId" : "3aae11bc-5a4c-4b16-a73a-497ead91173c",
+      "outcome" : "SUCCESS",
+      "purchaseId" : "2e72fe2d-36b5-422c-ba89-c99b22a7196a",
+      "replayed" : false,
+      "before" : {
+        "stockAvailable" : 8,
+        "stockVersion" : 1,
+        "purchaseCount" : 1,
+        "purchaseSumQuantity" : 2,
+        "idempotencyRowCount" : 1
+      },
+      "after" : {
+        "stockAvailable" : 6,
+        "stockVersion" : 2,
+        "purchaseCount" : 2,
+        "purchaseSumQuantity" : 4,
+        "idempotencyRowCount" : 2
+      },
+      "stateUnchanged" : false
+    }, {
+      "variant" : "isolated_reads_for_both_callers_same_key",
+      "callerAPurchaseId" : "b06f552b-fd18-4865-b976-5ab2d4c0d037",
+      "callerBPurchaseId" : "2e72fe2d-36b5-422c-ba89-c99b22a7196a",
+      "before" : {
+        "stockAvailable" : 6,
+        "stockVersion" : 2,
+        "purchaseCount" : 2,
+        "purchaseSumQuantity" : 4,
+        "idempotencyRowCount" : 2
+      },
+      "after" : {
+        "stockAvailable" : 6,
+        "stockVersion" : 2,
+        "purchaseCount" : 2,
+        "purchaseSumQuantity" : 4,
+        "idempotencyRowCount" : 2
+      },
+      "stateUnchanged" : true
+    }, {
+      "variant" : "caller_a_replay_same_key_cached_outcome",
+      "callerId" : "ce8aa084-cad6-4f8b-87d4-c7bee2f5b13c",
+      "outcome" : "SUCCESS",
+      "purchaseId" : "b06f552b-fd18-4865-b976-5ab2d4c0d037",
+      "replayed" : true,
+      "before" : {
+        "stockAvailable" : 6,
+        "stockVersion" : 2,
+        "purchaseCount" : 2,
+        "purchaseSumQuantity" : 4,
+        "idempotencyRowCount" : 2
+      },
+      "after" : {
+        "stockAvailable" : 6,
+        "stockVersion" : 2,
+        "purchaseCount" : 2,
+        "purchaseSumQuantity" : 4,
+        "idempotencyRowCount" : 2
+      },
+      "stateUnchanged" : true
+    } ]
+  } ]
+}

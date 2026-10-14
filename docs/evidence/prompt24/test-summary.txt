@@ -1,0 +1,70 @@
+================================================================================
+AETHERCORE SUREFIRE TEST EXECUTION SUMMARY - PROMPT24
+================================================================================
+Run ID: prompt24-20261014-172137-be44a2
+Timestamp: 2026-10-14T17:21:37.397826+07:00
+Git Base HEAD: 68bd59e369f3ae343c619eeba6bb8fd13624eef2
+Working Tree State: DIRTY (uncommitted files present)
+Command: C:\Program Files\Apache\maven\apache-maven-3.9.12\bin\mvn.CMD clean test -Dlab.runId=prompt24-20261014-172137-be44a2 -Dlab.evidenceDir=D:\Project CV\INTERVIEW\aethercore\backend-app\target\lab-evidence\prompt24-20261014-172137-be44a2
+Reactor Result: BUILD SUCCESS
+
+Runtime Environment:
+- Java: java version "22" 2024-03-19
+- Maven: Apache Maven 3.9.12 (848fbb4bf2d427b72bdb2471c22fced7ebd9a7a1)
+- Docker: Docker Server 29.5.3
+- Test Database: postgres:16-alpine (configured); runtime per-suite recorded in observations
+- Frameworks (pom resolved): Spring Boot 3.3.4 / Spring 6.1.13 / Hibernate 6.5.3.Final (test-scope)
+
+================================================================================
+MODULE 1: core-lab (Pure Java Mechanics)
+Total Test Classes: 17
+Total Tests Run: 34 | Failures: 0 | Errors: 0 | Skipped: 0
+--------------------------------------------------------------------------------
+- com.aethercore.core.m1e1.PlayerKeyExperimentsTest: 0 tests (elapsed: 0.091s) [PASS]
+- com.aethercore.core.m1e1.PlayerKeyExperimentsTest$VariantATests: 2 tests (elapsed: 0.007s) [PASS]
+- com.aethercore.core.m1e1.PlayerKeyExperimentsTest$VariantBTests: 1 tests (elapsed: 0.005s) [PASS]
+- com.aethercore.core.m1e1.PlayerKeyExperimentsTest$VariantCTests: 3 tests (elapsed: 0.012s) [PASS]
+- com.aethercore.core.m1e1.PlayerKeyExperimentsTest$VariantDTests: 2 tests (elapsed: 0.042s) [PASS]
+- com.aethercore.core.m1e3.RecordExperimentsTest: 0 tests (elapsed: 0.117s) [PASS]
+- com.aethercore.core.m1e3.RecordExperimentsTest$CharacterStatsTests: 3 tests (elapsed: 0.103s) [PASS]
+- com.aethercore.core.m1e3.RecordExperimentsTest$ShallowImmutabilityTests: 2 tests (elapsed: 0.009s) [PASS]
+- com.aethercore.core.m1e3.WrapperAndPrecisionExperimentsTest: 0 tests (elapsed: 0.054s) [PASS]
+- com.aethercore.core.m1e3.WrapperAndPrecisionExperimentsTest$BigDecimalCreationTests: 3 tests (elapsed: 0.012s) [PASS]
+- com.aethercore.core.m1e3.WrapperAndPrecisionExperimentsTest$IntegerCacheTests: 2 tests (elapsed: 0.005s) [PASS]
+- com.aethercore.core.m1e3.WrapperAndPrecisionExperimentsTest$PrimitiveWrapperTests: 4 tests (elapsed: 0.01s) [PASS]
+- com.aethercore.core.m1e3.WrapperAndPrecisionExperimentsTest$ScaleAndCalculatorTests: 4 tests (elapsed: 0.022s) [PASS]
+- com.aethercore.core.m1e4.DamageStrategyExperimentsTest: 0 tests (elapsed: 0.027s) [PASS]
+- com.aethercore.core.m1e4.DamageStrategyExperimentsTest$DamageCalculatorTests: 3 tests (elapsed: 0.008s) [PASS]
+- com.aethercore.core.m1e4.DamageStrategyExperimentsTest$MethodDispatchTests: 1 tests (elapsed: 0.005s) [PASS]
+- com.aethercore.core.m1e4.DamageStrategyExperimentsTest$StrategyCalculationTests: 4 tests (elapsed: 0.008s) [PASS]
+
+================================================================================
+MODULE 2: backend-app (Spring Boot, Concurrency, JDBC, JPA, Propagation, Locking, Fetch, Pagination, Query Plan, Keyset Pagination)
+Total Test Classes: 21
+Total Tests Run: 108 | Failures: 0 | Errors: 0 | Skipped: 0
+--------------------------------------------------------------------------------
+- com.aethercore.backend.LabEntryIntegrationTest: 3 tests (elapsed: 8.422s) [PASS]
+- com.aethercore.backend.damage.DamageStrategyWiringTest: 2 tests (elapsed: 0.551s) [PASS]
+- com.aethercore.backend.fetch.JpaFetchExperimentsTest: 5 tests (elapsed: 9.147s) [PASS]
+- com.aethercore.backend.locking.PostgresDeadlockExperimentsTest: 3 tests (elapsed: 6.933s) [PASS]
+- com.aethercore.backend.market.MarketLockingConcurrencyTest: 11 tests (elapsed: 3.803s) [PASS]
+- com.aethercore.backend.market.MarketPurchaseConcurrencyTest: 9 tests (elapsed: 3.435s) [PASS]
+- com.aethercore.backend.market.idempotency.MarketIdempotencyIntegrationTest: 8 tests (elapsed: 3.829s) [PASS]
+- com.aethercore.backend.market.idempotency.RequestFingerprintTest: 3 tests (elapsed: 0.008s) [PASS]
+- com.aethercore.backend.market.idempotency.migration.MarketIdempotencyMigrationTest: 3 tests (elapsed: 3.855s) [PASS]
+- com.aethercore.backend.market.idempotency.migration.NonTransactionalIndexMigrationTest: 3 tests (elapsed: 3.503s) [PASS]
+- com.aethercore.backend.market.jpa.JpaVersionExperimentsTest: 6 tests (elapsed: 3.678s) [PASS]
+- com.aethercore.backend.pagination.JpaCollectionPaginationExperimentsTest: 5 tests (elapsed: 2.989s) [PASS]
+- com.aethercore.backend.queryplan.PostgresKeysetPaginationExperimentsTest: 4 tests (elapsed: 3.821s) [PASS]
+- com.aethercore.backend.queryplan.PostgresPredicateIndexExperimentsTest: 4 tests (elapsed: 4.115s) [PASS]
+- com.aethercore.backend.queryplan.PostgresQueryPlanExperimentsTest: 4 tests (elapsed: 4.945s) [PASS]
+- com.aethercore.backend.security.JwtRolesConverterTest: 7 tests (elapsed: 0.11s) [PASS]
+- com.aethercore.backend.security.MarketMethodSecurityIntegrationTest: 2 tests (elapsed: 3.704s) [PASS]
+- com.aethercore.backend.security.MarketSecurityIntegrationTest: 9 tests (elapsed: 4.04s) [PASS]
+- com.aethercore.backend.security.MethodSecurityProxyExperimentsTest: 2 tests (elapsed: 0.089s) [PASS]
+- com.aethercore.backend.transaction.TransactionPropagationExperimentsTest: 6 tests (elapsed: 3.511s) [PASS]
+- com.aethercore.backend.transaction.TransactionProxyExperimentsTest: 9 tests (elapsed: 4.118s) [PASS]
+
+================================================================================
+REACTOR TOTAL: 142 Tests Run | 0 Failures | 0 Errors | 0 Skipped | ALL PASS
+================================================================================
