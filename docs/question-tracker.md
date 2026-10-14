@@ -79,6 +79,21 @@
 
 ---
 
+| **SB61** | Authentication/authorization trong request flow | M2-E8A (SEC1, SEC5, SEC6: SecurityFilterChain, BearerTokenFilter, AuthenticationProvider/NimbusJwtDecoder, AuthorizationFilter, SecurityContextHolder; oral chưa đánh giá) | VERIFIED | VERIFIED (Spring Security 6.3.3) | AWAITING_CANDIDATE | Verified scenario sau runtime; năng lực oral chưa đánh giá |
+| **SB62** | Một SecurityFilterChain, matchers và HttpSecurity bean | M2-E8A (Cấu hình một SecurityFilterChain, matchers permitAll / hasRole / denyAll, HttpSecurity DSL bean; không tuyên bố multiple-chain mastery) | VERIFIED | VERIFIED (Spring Security 6.3.3) | AWAITING_CANDIDATE | Bao phủ cấu hình một chain; chưa lab multiple chains |
+| **SB63** | HttpSecurity cấu hình stateless, CSRF disable, matchers | M2-E8A (Cấu hình SessionCreationPolicy.STATELESS, csrf.disable() cho REST API bearer header, matchers phân tầng) | VERIFIED | VERIFIED (Spring Security 6.3.3) | AWAITING_CANDIDATE | Bao phủ chuẩn REST API stateless |
+| **SB64** | JWT signature/claims → SecurityContext → access decision | M2-E8A (SEC2..SEC5: NimbusJwtDecoder verify RS256, validate claims iss/aud/exp/nbf/sub, JwtRolesConverter map GrantedAuthority vào SecurityContext) | VERIFIED | VERIFIED (Spring Security 6.3.3) | AWAITING_CANDIDATE | Verified trong contract RS256 của lab |
+| **SB65** | Expiry/nbf validation, token compromised / revoked | M2-E8A (SEC3: JwtTimestampValidator với 60s clock skew; compromised/revoked token chưa có runtime lab) | PARTIAL | VERIFIED (Spring Security 6.3.3) | AWAITING_CANDIDATE | PARTIAL; compromised/revoked token chưa có runtime lab |
+| **SB66** | hasRole/hasAuthority và ROLE_ mapping | M2-E8A (JwtRolesConverter ánh xạ mảng roles sang ROLE_TRADER; SEC5 kiểm chứng 403 khi thiếu role; 7/7 unit tests PASS) | VERIFIED | VERIFIED (Spring Security 6.3.3) | AWAITING_CANDIDATE | Verified phần mapping và endpoint rule đã test |
+| **SB67** | Cùng role nhưng không có quyền đọc request của người khác (Owner scoping) | M2-E8A (SEC9: User B dùng role TRADER đọc request của User A bị 404 qua parameterized SQL `WHERE caller_id = ?`) | VERIFIED | VERIFIED (PostgreSQL 16) | AWAITING_CANDIDATE | Verified purchase-request ownership scenario |
+| **SB68** | Giải thích CORS/CSRF và assumptions header bearer | M2-E8A (Lý thuyết cơ chế: CSRF bảo vệ cookie browser session, Bearer header trong Authorization không bị browser tự động đính kèm; chưa có browser exploit lab) | THEORY/PARTIAL | THEORY | AWAITING_CANDIDATE | THEORY/PARTIAL; chưa có browser exploit/CORS suite |
+| **SB69** | CORS cấu hình và rủi ro misconfiguration | M2-E8A (Lý thuyết về Origin header, Preflight OPTIONS request; chưa có browser lab suite) | THEORY/PARTIAL | THEORY | AWAITING_CANDIDATE | THEORY/PARTIAL; chưa có browser exploit/CORS suite |
+| **SB70** | Nhiều SecurityFilterChain phân tách API và Public | Chưa thực hiện trong M2-E8A (AetherCore hiện dùng một SecurityFilterChain duy nhất có phân tầng matchers) | NOT_STARTED | NOT_STARTED | AWAITING_CANDIDATE | Chưa thực hiện; sẽ lab khi có yêu cầu microservice gateway / admin portal |
+| **SB71** | Password hashing (BCrypt / Argon2) | Chưa thực hiện trong M2-E8A (Hệ thống hoạt động như OAuth2 Resource Server thuần túy, tin cậy Authorization Server) | NOT_STARTED | NOT_STARTED | AWAITING_CANDIDATE | Chưa thực hiện |
+| **SB72** | So sánh endpoint/service/data ownership với CV Street Voice | M2-E8A (Đối chiếu kiến trúc owner scoping SQL query `caller_id = ?` với bài toán phân quyền dữ liệu user; AetherCore không chứng minh implementation của Street Voice) | PARTIAL | PARTIAL (Đối chiếu thiết kế) | AWAITING_CANDIDATE | PARTIAL; AETHERCORE không chứng minh implementation của Street Voice |
+
+---
+
 ## Câu hỏi mở rộng (Ngoài ngân hàng chuẩn / Chủ đề thực nghiệm nâng cao)
 
 | Mã nội bộ | Câu hỏi / Chủ đề thảo luận | Module & Bằng chứng | Độ phủ | Xác minh kỹ thuật | Trạng thái người học |

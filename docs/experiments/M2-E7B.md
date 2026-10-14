@@ -36,10 +36,10 @@ Bảng đối chiếu tổng hợp cơ chế và hành vi giữa hai mô hình:
 
 | Tiêu chí | M2-E7A (V6 Transactional Migration) | M2-E7B (V2 Non-Transactional Migration) |
 |---|---|---|
-| **Cơ chế transaction** | Mặc định: Toàn bộ script bọc trong `BEGIN ... COMMIT` | Không dùng transaction: `executeInTransaction=false` qua sidecar `.conf` |
+| **Cơ chế transaction** | Mặc định: Flyway bọc toàn bộ script trong một transaction (`BEGIN ... COMMIT`) | Flyway không bọc script trong transaction (`executeInTransaction=false` qua sidecar `.conf`). PostgreSQL vẫn thực thi các transaction nội bộ theo từng statement |
 | **Cơ chế khóa Flyway** | Khóa Transactional Advisory Lock (`pg_advisory_xact_lock`) | Khóa Session-level Advisory Lock (`flyway.postgresql.transactional.lock=false`) |
 | **Lệnh DDL điển hình** | `ALTER TABLE ... ADD CONSTRAINT` | `CREATE INDEX CONCURRENTLY` |
-| **Khi script gặp lỗi** | PostgreSQL kích hoạt **DDL Rollback** toàn bộ transaction | **Không có rollback**: Các thay đổi trước đó hoặc dở dang được giữ lại |
+| **Khi script gặp lỗi** | PostgreSQL kích hoạt **DDL Rollback** toàn bộ transaction | **Không có transaction cấp script để rollback**: Script migration không bọc trong transaction ngoài nên các thay đổi catalog dở dang (như INVALID index) được giữ lại |
 | **Trạng thái Database Objects sau lỗi** | Khôi phục 100% về trạng thái cũ; constraint cũ bảo toàn | Bỏ lại **INVALID index** trong catalog (`indisvalid = false`) |
 | **Trạng thái `flyway_schema_history`** | Sạch sẽ: Dòng ghi lịch sử bị rollback, không lưu bản ghi failed | Ghi nhận bản ghi migration với `success = false` |
 | **Hành vi `flyway.validate()`** | PASS (nếu classpath khớp với version trước lỗi) | **FAIL**: Báo lỗi tồn tại failed migration trong lịch sử |
@@ -54,12 +54,12 @@ Bảng đối chiếu tổng hợp cơ chế và hành vi giữa hai mô hình:
 Để chạy `CREATE INDEX CONCURRENTLY` thông qua Flyway trên PostgreSQL, kỹ sư bắt buộc phải thiết lập **đồng thời cả hai cấu hình** sau:
 
 ### 3.1. Cấu hình cấp độ Script (Sidecar Configuration)
-Tạo file sidecar cấu hình nằm cạnh script migration:
+Trong lab thực nghiệm này, file sidecar được tạo tường minh nằm cạnh script migration:
 `V2__create_unique_token_index.sql.conf`
 ```properties
 executeInTransaction=false
 ```
-Cấu hình này yêu cầu Flyway không mở transaction block (`conn.setAutoCommit(false)` hoặc `BEGIN`) khi thực thi file SQL này.
+Cấu hình này yêu cầu Flyway không bọc script migration này vào transaction block (`conn.setAutoCommit(false)` hoặc `BEGIN`) ở cấp độ migration runner. Đây là cấu hình tường minh của kịch bản lab; tránh khẳng định mọi phiên bản Flyway đều bắt buộc người dùng tạo sidecar để nhận diện CIC.
 
 ### 3.2. Cấu hình cấp độ Engine Flyway (Advisory Lock Mode)
 Trong cấu hình của Flyway (hoặc `application.properties`):
@@ -67,8 +67,9 @@ Trong cấu hình của Flyway (hoặc `application.properties`):
 flyway.postgresql.transactional.lock=false
 ```
 **Bản chất kỹ thuật:**
-Mặc định, Flyway sử dụng `pg_advisory_xact_lock` để khóa database tránh việc nhiều tiến trình cùng migrate đồng thời. Khóa transactional này tự giải phóng khi transaction kết thúc. Nhưng khi một migration chạy với `executeInTransaction=false`, không có transaction nào được mở, dẫn đến xung đột hoặc lỗi cơ chế khóa.
-Thiết lập `flyway.postgresql.transactional.lock=false` yêu cầu Flyway chuyển sang dùng `pg_advisory_lock` (session-level), tồn tại xuyên suốt kết nối và được giải phóng bằng `pg_advisory_unlock` khi phiên kết thúc.
+Mặc định trên PostgreSQL, Flyway sử dụng `pg_advisory_xact_lock` (transactional advisory lock) để khóa database tránh việc nhiều tiến trình cùng migrate đồng thời. Khóa transactional này tự giải phóng khi transaction kết thúc.
+Thiết lập `flyway.postgresql.transactional.lock=false` yêu cầu Flyway chuyển sang sử dụng session-level advisory lock (`pg_advisory_lock`), cho phép thực thi migration khi script không bọc trong transaction ngoài. Khóa session-level advisory lock tồn tại trong phiên kết nối và có thể được giải phóng bằng `pg_advisory_unlock`, hoặc tự động giải phóng khi đóng kết nối/phiên làm việc (session termination); hai việc này không phải cùng một thao tác.
+*Lưu ý phạm vi thực nghiệm:* Lab hiện tại tập trung kiểm chứng chế độ session-level advisory lock này; lab chưa so sánh đối chứng trực tiếp lỗi cụ thể của chế độ transactional advisory lock mặc định khi gặp CIC, nên không ghi nguyên nhân lỗi của mode còn lại như một kết quả đã đo.
 
 ---
 
@@ -165,12 +166,14 @@ Thiết lập `flyway.postgresql.transactional.lock=false` yêu cầu Flyway chu
 
 ## 6. Bảng Ánh Xạ Câu Hỏi Phỏng Vấn (Question Tracker Mapping)
 
-| Mã câu hỏi | Trọng tâm câu hỏi | Mức độ bao phủ của Prompt 21 | Trạng thái kỹ thuật |
-|:---:|---|---|:---:|
-| **SB59** | Flyway/Liquibase quản lý schema; migration lỗi khi deploy | **VERIFIED:** Đã kiểm chứng toàn diện cả 2 nhánh: Transactional DDL rollback (M2-E7A) và Non-transactional failure để lại INVALID index cùng giới hạn của `flyway.repair()` (M2-E7B). Chưa lab Liquibase. | `VERIFIED` |
-| **SQL69** | Tạo index bảng lớn ảnh hưởng ghi và deploy | **PARTIAL:** Đã kiểm chứng cơ chế `CONCURRENTLY`, lỗi SQLSTATE `25001`, build failure để lại INVALID index và quy trình recovery. Chưa đo writer latency dưới tải lớn. | `VERIFIED` |
-| **SQL68** | Schema mới, dữ liệu cũ, phiên bản code đang chạy | **PARTIAL:** Đã kiểm chứng trường hợp dữ liệu cũ trùng lặp làm gãy unique index dở dang và quy trình remediation. Chưa kiểm chứng rolling deployment code cũ/mới. | `VERIFIED` |
-| **SB60** | Thay schema tương thích code cũ/mới | **PARTIAL:** Giữ nguyên mức độ bao phủ; chưa thí nghiệm expand-contract deployment. | `VERIFIED` |
+Phân biệt rõ: **Kịch bản Lab thực tế** (NC1..NC3) đã được đo lường và xác nhận (VERIFIED); **Độ bao phủ câu hỏi phỏng vấn chuẩn** ở mức PARTIAL vì chưa bao quát toàn bộ bài toán phân tán/rolling; và **Năng lực người học** tiếp tục ở trạng thái `AWAITING_CANDIDATE`.
+
+| Mã câu hỏi | Trọng tâm câu hỏi | Trạng thái kịch bản Lab | Mức độ bao phủ câu hỏi | Đánh giá ứng viên |
+|:---:|---|:---:|:---:|:---:|
+| **SB59** | Flyway/Liquibase quản lý schema; migration lỗi khi deploy | **VERIFIED** (NC1..NC3) | **VERIFIED** (Flyway PostgreSQL 16; chưa lab Liquibase) | `AWAITING_CANDIDATE` |
+| **SQL69** | Tạo index bảng lớn ảnh hưởng ghi và deploy | **VERIFIED** (NC1..NC3) | **PARTIAL** (Đã đo SQLSTATE `25001`, INVALID index, recovery; chưa đo writer latency dưới tải lớn) | `AWAITING_CANDIDATE` |
+| **SQL68** | Schema mới, dữ liệu cũ, phiên bản code đang chạy | **VERIFIED** (NC2..NC3) | **PARTIAL** (Đã đo duplicate data làm hỏng unique index; chưa kiểm chứng rolling deployment) | `AWAITING_CANDIDATE` |
+| **SB60** | Thay schema tương thích code cũ/mới | **VERIFIED** (NC2..NC3) | **PARTIAL** (Chưa thí nghiệm expand-contract deployment đa phiên bản) | `AWAITING_CANDIDATE` |
 
 ---
 
@@ -178,4 +181,4 @@ Thiết lập `flyway.postgresql.transactional.lock=false` yêu cầu Flyway chu
 
 1. **`CREATE INDEX CONCURRENTLY` là con dao hai lưỡi:** Giúp tránh chặn writes nhưng tước đi lớp đệm an toàn của Transactional DDL. Khi fail, nó để lại "rác" trong database (INVALID index).
 2. **`flyway.repair()` không phải là cây gậy thần:** Repair chỉ phục vụ việc đồng bộ lại metadata trong Flyway history. Kỹ sư phải có trách nhiệm dọn dẹp invalid objects và xử lý dữ liệu trước khi thử lại.
-3. **Nắm vững quy trình phục hồi 3 bước:** Luôn nhớ thứ tự: (1) Repair metadata, (2) Drop invalid object và sửa dữ liệu, (3) Retry migration. Tuyệt đối không sửa file script migration đã chạy.
+3. **Quy trình phục hồi có kiểm chứng trong lab:** Thí nghiệm NC3 đã chứng minh một quy trình cụ thể: (1) Repair metadata qua `flyway.repair()`, (2) Drop invalid object và sửa dữ liệu trùng, (3) Retry migration. Tuyệt đối không sửa file script migration đã chạy. Đây là quy trình kiểm chứng cho kịch bản lab; không diễn đạt thứ tự này là duy nhất đúng cho mọi hệ thống, và trên production với bảng lớn chịu tải, việc dọn dẹp index cần cân nhắc các kỹ thuật như `DROP INDEX CONCURRENTLY` tùy trường hợp cụ thể.

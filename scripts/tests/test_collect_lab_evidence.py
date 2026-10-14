@@ -1588,5 +1588,250 @@ class TestEvidenceCollector(unittest.TestCase):
             )
         self.assertIn("Required caseId 'NC2' not found", str(cm.exception))
 
+    def test_security_observations_validation(self):
+        obs_dir = os.path.join(self.temp_dir, "security_obs")
+        os.makedirs(obs_dir, exist_ok=True)
+        file_path = os.path.join(obs_dir, "security-observations.json")
+
+        valid_sec_payload = {
+            "schemaVersion": "1.0.0",
+            "runId": "run-sec-1",
+            "scenarioCount": 9,
+            "scenarios": [
+                {
+                    "caseId": "SEC1",
+                    "scenarioId": "SEC1",
+                    "subcaseCount": 3,
+                    "subcases": [
+                        {"variant": "missing_token", "expectedStatus": 401, "observedStatus": 401, "bearerChallengePresent": True, "stateUnchanged": True},
+                        {"variant": "malformed_token", "expectedStatus": 401, "observedStatus": 401, "bearerChallengePresent": True, "stateUnchanged": True},
+                        {"variant": "wrong_key_b", "expectedStatus": 401, "observedStatus": 401, "bearerChallengePresent": True, "stateUnchanged": True}
+                    ]
+                },
+                {
+                    "caseId": "SEC2",
+                    "scenarioId": "SEC2",
+                    "subcaseCount": 10,
+                    "subcases": [
+                        {"variant": "wrong_issuer", "expectedStatus": 401, "observedStatus": 401, "stateUnchanged": True},
+                        {"variant": "missing_audience", "expectedStatus": 401, "observedStatus": 401, "stateUnchanged": True},
+                        {"variant": "wrong_audience", "expectedStatus": 401, "observedStatus": 401, "stateUnchanged": True},
+                        {"variant": "expired", "expectedStatus": 401, "observedStatus": 401, "stateUnchanged": True},
+                        {"variant": "future_nbf", "expectedStatus": 401, "observedStatus": 401, "stateUnchanged": True},
+                        {"variant": "missing_exp", "expectedStatus": 401, "observedStatus": 401, "stateUnchanged": True},
+                        {"variant": "missing_sub", "expectedStatus": 401, "observedStatus": 401, "stateUnchanged": True},
+                        {"variant": "invalid_sub_non_uuid", "expectedStatus": 401, "observedStatus": 401, "stateUnchanged": True},
+                        {"variant": "roles_as_integer", "expectedStatus": 401, "observedStatus": 401, "stateUnchanged": True},
+                        {"variant": "roles_as_string", "expectedStatus": 401, "observedStatus": 401, "stateUnchanged": True}
+                    ]
+                },
+                {
+                    "caseId": "SEC3",
+                    "scenarioId": "SEC3",
+                    "subcaseCount": 3,
+                    "subcases": [
+                        {"variant": "empty_roles", "expectedStatus": 403, "observedStatus": 403, "stateUnchanged": True},
+                        {"variant": "viewer_role_only", "expectedStatus": 403, "observedStatus": 403, "stateUnchanged": True},
+                        {"variant": "trader_role_success", "expectedStatus": 200, "observedStatus": 200, "stateUnchanged": False}
+                    ]
+                },
+                {
+                    "caseId": "SEC4",
+                    "scenarioId": "SEC4",
+                    "subcaseCount": 3,
+                    "subcases": [
+                        {"variant": "fresh_purchase", "expectedStatus": 200, "observedStatus": 200, "responseBody": '{"resultCode":"SUCCESS","purchaseId":"11111111-1111-1111-1111-111111111111","replayed":false}'},
+                        {"variant": "replay_exact", "expectedStatus": 200, "observedStatus": 200, "responseBody": '{"resultCode":"SUCCESS","purchaseId":"11111111-1111-1111-1111-111111111111","replayed":true}'},
+                        {"variant": "conflict_reuse", "expectedStatus": 409, "observedStatus": 409, "responseBody": '{"error":"IDEMPOTENCY_CONFLICT","message":"payload mismatch"}'}
+                    ]
+                },
+                {
+                    "caseId": "SEC5",
+                    "scenarioId": "SEC5",
+                    "subcaseCount": 3,
+                    "subcases": [
+                        {"variant": "caller_b_read_foreign_key", "expectedStatus": 404, "observedStatus": 404, "stateUnchanged": True},
+                        {"variant": "caller_a_read_own_key", "expectedStatus": 200, "observedStatus": 200, "stateUnchanged": True},
+                        {"variant": "read_unknown_key", "expectedStatus": 404, "observedStatus": 404, "stateUnchanged": True}
+                    ]
+                },
+                {
+                    "caseId": "SEC6",
+                    "scenarioId": "SEC6",
+                    "subcaseCount": 4,
+                    "subcases": [
+                        {"variant": "caller_a_purchase_key_k", "expectedStatus": 200, "observedStatus": 200, "responseBody": '{"resultCode":"SUCCESS","purchaseId":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}'},
+                        {"variant": "caller_b_purchase_same_key_k", "expectedStatus": 200, "observedStatus": 200, "responseBody": '{"resultCode":"SUCCESS","purchaseId":"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"}'},
+                        {"variant": "caller_a_read_k", "expectedStatus": 200, "observedStatus": 200, "responseBody": '{"purchaseId":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}'},
+                        {"variant": "caller_b_read_k", "expectedStatus": 200, "observedStatus": 200, "responseBody": '{"purchaseId":"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"}'}
+                    ]
+                },
+                {
+                    "caseId": "SEC7",
+                    "scenarioId": "SEC7",
+                    "subcaseCount": 3,
+                    "subcases": [
+                        {"variant": "spoof_via_header_ignored", "expectedStatus": 200, "observedStatus": 200},
+                        {"variant": "spoof_via_query_ignored", "expectedStatus": 200, "observedStatus": 200},
+                        {"variant": "spoof_via_body_rejected_400", "expectedStatus": 400, "observedStatus": 400}
+                    ]
+                },
+                {
+                    "caseId": "SEC8",
+                    "scenarioId": "SEC8",
+                    "subcaseCount": 3,
+                    "subcases": [
+                        {"variant": "quantity_decimal_coercion_rejected", "expectedStatus": 400, "observedStatus": 400, "stateUnchanged": True},
+                        {"variant": "not_available_fresh", "expectedStatus": 200, "observedStatus": 200, "responseBody": '{"resultCode":"NOT_AVAILABLE"}'},
+                        {"variant": "not_available_replayed_after_restock", "expectedStatus": 200, "observedStatus": 200, "responseBody": '{"resultCode":"NOT_AVAILABLE","replayed":true}'}
+                    ]
+                },
+                {
+                    "caseId": "SEC9",
+                    "scenarioId": "SEC9",
+                    "subcaseCount": 3,
+                    "subcases": [
+                        {"variant": "stateless_request_with_token", "expectedStatus": 200, "observedStatus": 200},
+                        {"variant": "stateless_request_without_token_rejected_401", "expectedStatus": 401, "observedStatus": 401},
+                        {"variant": "public_get_lab_entry_200", "expectedStatus": 200, "observedStatus": 200}
+                    ]
+                }
+            ]
+        }
+
+        # 1. Valid payload passes
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(valid_sec_payload, f)
+        res = self.collector.validate_observations(
+            obs_dir, run_id="run-sec-1",
+            required_sets={"security-observations.json": [f"SEC{i}" for i in range(1, 10)]}
+        )
+        self.assertEqual(res, ["security-observations.json"])
+
+        # 2. Missing SEC case raises
+        c1 = copy.deepcopy(valid_sec_payload)
+        c1["scenarios"].pop(2) # remove SEC3
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c1, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-sec-1",
+                required_sets={"security-observations.json": [f"SEC{i}" for i in range(1, 10)]}
+            )
+        self.assertIn("Required caseId 'SEC3' not found", str(cm.exception))
+
+        # 3. Mismatched runId raises
+        c2 = copy.deepcopy(valid_sec_payload)
+        c2["runId"] = "wrong-run-id"
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c2, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-sec-1",
+                required_sets={"security-observations.json": [f"SEC{i}" for i in range(1, 10)]}
+            )
+        self.assertIn("Mismatched runId", str(cm.exception))
+
+        # 4. SEC1 missing token returns 200 instead of 401 raises
+        c3 = copy.deepcopy(valid_sec_payload)
+        c3["scenarios"][0]["subcases"][0]["expectedStatus"] = 200
+        c3["scenarios"][0]["subcases"][0]["observedStatus"] = 200
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c3, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-sec-1",
+                required_sets={"security-observations.json": [f"SEC{i}" for i in range(1, 10)]}
+            )
+        self.assertIn("must return HTTP 401", str(cm.exception))
+
+        # 5. SEC1 stateUnchanged is False (stock modified on rejected request) raises
+        c4 = copy.deepcopy(valid_sec_payload)
+        c4["scenarios"][0]["subcases"][0]["stateUnchanged"] = False
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c4, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-sec-1",
+                required_sets={"security-observations.json": [f"SEC{i}" for i in range(1, 10)]}
+            )
+        self.assertIn("no DB writes on rejection", str(cm.exception))
+
+        # 6. SEC3 empty roles returns 200 instead of 403 raises
+        c5 = copy.deepcopy(valid_sec_payload)
+        c5["scenarios"][2]["subcases"][0]["expectedStatus"] = 200
+        c5["scenarios"][2]["subcases"][0]["observedStatus"] = 200
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c5, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-sec-1",
+                required_sets={"security-observations.json": [f"SEC{i}" for i in range(1, 10)]}
+            )
+        self.assertIn("empty_roles must return HTTP 403", str(cm.exception))
+
+        # 7. SEC4 replay purchaseId mismatch raises
+        c6 = copy.deepcopy(valid_sec_payload)
+        c6["scenarios"][3]["subcases"][1]["responseBody"] = '{"resultCode":"SUCCESS","purchaseId":"22222222-2222-2222-2222-222222222222","replayed":true}'
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c6, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-sec-1",
+                required_sets={"security-observations.json": [f"SEC{i}" for i in range(1, 10)]}
+            )
+        self.assertIn("replay_exact purchaseId must match fresh_purchase", str(cm.exception))
+
+        # 8. SEC5 foreign lookup returns 200 instead of 404 raises
+        c7 = copy.deepcopy(valid_sec_payload)
+        c7["scenarios"][4]["subcases"][0]["expectedStatus"] = 200
+        c7["scenarios"][4]["subcases"][0]["observedStatus"] = 200
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c7, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-sec-1",
+                required_sets={"security-observations.json": [f"SEC{i}" for i in range(1, 10)]}
+            )
+        self.assertIn("foreign lookup rejected", str(cm.exception))
+
+        # 9. SEC6 cross-caller replay returns same purchaseId raises
+        c8 = copy.deepcopy(valid_sec_payload)
+        c8["scenarios"][5]["subcases"][1]["responseBody"] = '{"resultCode":"SUCCESS","purchaseId":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}'
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c8, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-sec-1",
+                required_sets={"security-observations.json": [f"SEC{i}" for i in range(1, 10)]}
+            )
+        self.assertIn("no cross-caller replay", str(cm.exception))
+
+        # 10. SEC8 decimal coercion returns 200 instead of 400 raises
+        c9 = copy.deepcopy(valid_sec_payload)
+        c9["scenarios"][7]["subcases"][0]["expectedStatus"] = 200
+        c9["scenarios"][7]["subcases"][0]["observedStatus"] = 200
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c9, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-sec-1",
+                required_sets={"security-observations.json": [f"SEC{i}" for i in range(1, 10)]}
+            )
+        self.assertIn("quantity_decimal_coercion_rejected must return HTTP 400", str(cm.exception))
+
+        # 11. SEC9 stateless request without token returns 200 instead of 401 raises
+        c10 = copy.deepcopy(valid_sec_payload)
+        c10["scenarios"][8]["subcases"][1]["expectedStatus"] = 200
+        c10["scenarios"][8]["subcases"][1]["observedStatus"] = 200
+        with open(file_path, "w", encoding="utf-8") as f:
+            json.dump(c10, f)
+        with self.assertRaises(ValidationError) as cm:
+            self.collector.validate_observations(
+                obs_dir, run_id="run-sec-1",
+                required_sets={"security-observations.json": [f"SEC{i}" for i in range(1, 10)]}
+            )
+        self.assertIn("no session retention", str(cm.exception))
+
 if __name__ == '__main__':
     unittest.main()

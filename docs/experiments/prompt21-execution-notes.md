@@ -54,10 +54,10 @@
    - Biên soạn `docs/exercises/M2-E7B-exercise.md`: Bài tập tình huống bảng `guild_member` trùng email, câu hỏi phân tích catalog, đề xuất quy trình xử lý dữ liệu có phê duyệt, 3 câu oral interview 60–90 giây kèm rubric chi tiết; giữ nguyên trạng thái `[AWAITING_CANDIDATE]`.
    - Cập nhật `docs/prediction-log.md` bổ sung 3 bản ghi dự đoán NC1, NC2, NC3.
    - Cập nhật `docs/question-tracker.md`:
-     * **SB59:** Nâng lên `VERIFIED` kỹ thuật cho cả transactional và non-transactional Flyway.
-     * **SQL69:** Nâng lên `PARTIAL` (kiểm chứng CONCURRENTLY, SQLSTATE 25001, INVALID index build failure và recovery; tải lớn chưa đo).
-     * **SQL68:** Nâng lên `PARTIAL` bổ sung duplicate data unique index failure & cleanup.
-     * **SB60:** Giữ nguyên `PARTIAL`.
+     * **SB59:** Kịch bản lab `VERIFIED` (NC1..NC3 trên Flyway PostgreSQL 16); chưa lab Liquibase. Ứng viên `AWAITING_CANDIDATE`.
+     * **SQL69:** Kịch bản lab `VERIFIED` (NC1..NC3); phạm vi câu hỏi `PARTIAL` (đo CONCURRENTLY, SQLSTATE 25001, INVALID index build failure và recovery; tải lớn chưa đo). Ứng viên `AWAITING_CANDIDATE`.
+     * **SQL68:** Kịch bản lab `VERIFIED` (NC2..NC3); phạm vi câu hỏi `PARTIAL` (đo duplicate data unique index failure & cleanup; chưa rolling deployment). Ứng viên `AWAITING_CANDIDATE`.
+     * **SB60:** Kịch bản lab `VERIFIED` (NC2..NC3); phạm vi câu hỏi `PARTIAL` (chưa expand-contract deployment). Ứng viên `AWAITING_CANDIDATE`.
 
 ---
 
@@ -70,5 +70,5 @@
 | **Gate C** | NC1 đo 25001/no index; NC2 đo 23505/INVALID/failed history | **PASSED** | NC1 đo SQLSTATE `25001`, catalog `exists = false`; NC2 đo SQLSTATE `23505`, catalog `indisvalid = false`, history `success = false`. |
 | **Gate D** | NC3 repair không đổi object/data; cleanup fixture; retry cùng script success | **PASSED** | NC3 đo checkpoint 2 index vẫn `indisvalid = false` và duplicate `IRON` còn nguyên sau repair; checkpoint 3 dọn dẹp không đổi file hash; checkpoint 4 retry thành công và index thành `indisvalid = true`. |
 | **Gate E** | Evidence có raw checkpoints; validator từ chối mutations; MG snapshots hữu ích | **PASSED** | `nontransactional-index-observations.json` lưu đủ 4 checkpoints; validator kiểm tra nghiêm ngặt; 22 unit tests của collector PASS. |
-| **Gate F** | Full Java/Python regression pass, không failure/error/skip | **PASSED** | 14/14 Java test methods PASS (`NonTransactionalIndexMigrationTest`, `MarketIdempotencyMigrationTest`, `MarketIdempotencyIntegrationTest`); 22/22 Python tests PASS. |
+| **Gate F** | Full Java/Python regression pass, không failure/error/skip | **PASSED** | Baseline full reactor: 122 Java tests = 34 core-lab + 88 backend-app (trong đó có 14 tests liên quan đến migration M2-E7A/B) PASS 100%, 0 failures, 0 errors, 0 skips; 22/22 Python tests PASS. |
 | **Gate G** | Learning docs/bài tập sẵn sàng; giữ nguyên `AWAITING_CANDIDATE` | **PASSED** | `M2-E7B.md` và `M2-E7B-exercise.md` hoàn thiện; candidate answer giữ `[AWAITING_CANDIDATE]`. |

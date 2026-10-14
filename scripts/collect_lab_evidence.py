@@ -146,10 +146,12 @@ class EvidenceCollector:
                 'predicate-index-observations.json': [f"IP{i}" for i in range(1, 5)],
                 'idempotency-observations.json': [f"ID{i}" for i in range(1, 8)]
             }
-            if self.prompt in ("prompt20", "prompt21") or os.path.exists(os.path.join(staging_dir, 'migration-observations.json')):
+            if self.prompt in ("prompt20", "prompt21", "prompt22") or os.path.exists(os.path.join(staging_dir, 'migration-observations.json')):
                 required_sets['migration-observations.json'] = ["MG1", "MG2", "MG3"]
-            if self.prompt == "prompt21" or os.path.exists(os.path.join(staging_dir, 'nontransactional-index-observations.json')):
+            if self.prompt in ("prompt21", "prompt22") or os.path.exists(os.path.join(staging_dir, 'nontransactional-index-observations.json')):
                 required_sets['nontransactional-index-observations.json'] = ["NC1", "NC2", "NC3"]
+            if self.prompt == "prompt22" or os.path.exists(os.path.join(staging_dir, 'security-observations.json')):
+                required_sets['security-observations.json'] = [f"SEC{i}" for i in range(1, 10)]
 
         validated = []
         for filename, expected_cases in required_sets.items():
@@ -202,6 +204,8 @@ class EvidenceCollector:
                     self._validate_migration_scenario(case_id, s)
                 elif filename == 'nontransactional-index-observations.json':
                     self._validate_nontransactional_index_scenario(case_id, s)
+                elif filename == 'security-observations.json':
+                    self._validate_security_scenario(case_id, s)
 
             for exp in expected_cases:
                 if exp not in found_cases:
@@ -810,6 +814,148 @@ class EvidenceCollector:
                 raise ValidationError("Scenario NC3 checkpoint4 repeatMigrationCount must be integer 0")
             if cp4.get("validationPassed") is not True:
                 raise ValidationError("Scenario NC3 checkpoint4 validationPassed must be True")
+
+    def _validate_security_scenario(self, case_id, s):
+        subcases = s.get("subcases")
+        if not isinstance(subcases, list) or len(subcases) == 0:
+            raise ValidationError(f"Scenario {case_id} must contain a non-empty list of 'subcases'")
+
+        subcase_count = s.get("subcaseCount")
+        if not _is_strict_int(subcase_count) or subcase_count != len(subcases):
+            raise ValidationError(f"Scenario {case_id} subcaseCount must match length of subcases list")
+
+        subcases_by_variant = {}
+        for sc in subcases:
+            var = sc.get("variant")
+            if not var:
+                raise ValidationError(f"Scenario {case_id} subcase missing 'variant' field")
+            subcases_by_variant[var] = sc
+            obs_st = sc.get("observedStatus")
+            exp_st = sc.get("expectedStatus")
+            if not _is_strict_int(obs_st) or not _is_strict_int(exp_st):
+                raise ValidationError(f"Scenario {case_id} subcase '{var}' statuses must be integers")
+            if obs_st != exp_st:
+                raise ValidationError(f"Scenario {case_id} subcase '{var}' observedStatus ({obs_st}) != expectedStatus ({exp_st})")
+
+        if case_id == "SEC1":
+            for exp_var in ["missing_token", "malformed_token", "wrong_key_b"]:
+                if exp_var not in subcases_by_variant:
+                    raise ValidationError(f"Scenario SEC1 missing required subcase '{exp_var}'")
+                sc = subcases_by_variant[exp_var]
+                if sc.get("observedStatus") != 401:
+                    raise ValidationError(f"Scenario SEC1 subcase '{exp_var}' must return HTTP 401")
+                if not sc.get("bearerChallengePresent"):
+                    raise ValidationError(f"Scenario SEC1 subcase '{exp_var}' must return Bearer challenge")
+                if sc.get("stateUnchanged") is not True:
+                    raise ValidationError(f"Scenario SEC1 subcase '{exp_var}' stateUnchanged must be True (no DB writes on rejection)")
+
+        elif case_id == "SEC2":
+            req_vars = [
+                "wrong_issuer", "missing_audience", "wrong_audience", "expired",
+                "future_nbf", "missing_exp", "missing_sub", "invalid_sub_non_uuid",
+                "roles_as_integer", "roles_as_string"
+            ]
+            for exp_var in req_vars:
+                if exp_var not in subcases_by_variant:
+                    raise ValidationError(f"Scenario SEC2 missing required claim variant '{exp_var}'")
+                sc = subcases_by_variant[exp_var]
+                if sc.get("observedStatus") != 401:
+                    raise ValidationError(f"Scenario SEC2 variant '{exp_var}' must return HTTP 401")
+                if sc.get("stateUnchanged") is not True:
+                    raise ValidationError(f"Scenario SEC2 variant '{exp_var}' stateUnchanged must be True (no DB writes)")
+
+        elif case_id == "SEC3":
+            for exp_var in ["empty_roles", "viewer_role_only", "trader_role_success"]:
+                if exp_var not in subcases_by_variant:
+                    raise ValidationError(f"Scenario SEC3 missing required subcase '{exp_var}'")
+            if subcases_by_variant["empty_roles"].get("observedStatus") != 403:
+                raise ValidationError("Scenario SEC3 empty_roles must return HTTP 403")
+            if subcases_by_variant["viewer_role_only"].get("observedStatus") != 403:
+                raise ValidationError("Scenario SEC3 viewer_role_only must return HTTP 403")
+            if subcases_by_variant["trader_role_success"].get("observedStatus") != 200:
+                raise ValidationError("Scenario SEC3 trader_role_success must return HTTP 200")
+
+        elif case_id == "SEC4":
+            for exp_var in ["fresh_purchase", "replay_exact", "conflict_reuse"]:
+                if exp_var not in subcases_by_variant:
+                    raise ValidationError(f"Scenario SEC4 missing required subcase '{exp_var}'")
+            fresh_body = subcases_by_variant["fresh_purchase"].get("responseBody", "")
+            replay_body = subcases_by_variant["replay_exact"].get("responseBody", "")
+            try:
+                import json as j
+                fresh_pid = j.loads(fresh_body).get("purchaseId")
+                replay_pid = j.loads(replay_body).get("purchaseId")
+                if not fresh_pid or fresh_pid != replay_pid:
+                    raise ValidationError("Scenario SEC4 replay_exact purchaseId must match fresh_purchase")
+            except Exception as e:
+                if not isinstance(e, ValidationError):
+                    raise ValidationError(f"Scenario SEC4 failed to parse purchaseId: {e}")
+                raise
+            conflict_body = subcases_by_variant["conflict_reuse"].get("responseBody", "")
+            if "IDEMPOTENCY_CONFLICT" not in conflict_body:
+                raise ValidationError("Scenario SEC4 conflict_reuse must return IDEMPOTENCY_CONFLICT")
+
+        elif case_id == "SEC5":
+            for exp_var in ["caller_b_read_foreign_key", "caller_a_read_own_key", "read_unknown_key"]:
+                if exp_var not in subcases_by_variant:
+                    raise ValidationError(f"Scenario SEC5 missing required subcase '{exp_var}'")
+            if subcases_by_variant["caller_b_read_foreign_key"].get("observedStatus") != 404:
+                raise ValidationError("Scenario SEC5 caller_b_read_foreign_key must return HTTP 404 (foreign lookup rejected)")
+            if subcases_by_variant["caller_a_read_own_key"].get("observedStatus") != 200:
+                raise ValidationError("Scenario SEC5 caller_a_read_own_key must return HTTP 200")
+            for var in ["caller_b_read_foreign_key", "caller_a_read_own_key", "read_unknown_key"]:
+                if subcases_by_variant[var].get("stateUnchanged") is not True:
+                    raise ValidationError(f"Scenario SEC5 subcase '{var}' must not mutate database")
+
+        elif case_id == "SEC6":
+            for exp_var in ["caller_a_purchase_key_k", "caller_b_purchase_same_key_k", "caller_a_read_k", "caller_b_read_k"]:
+                if exp_var not in subcases_by_variant:
+                    raise ValidationError(f"Scenario SEC6 missing required subcase '{exp_var}'")
+            try:
+                import json as j
+                pid_a = j.loads(subcases_by_variant["caller_a_purchase_key_k"].get("responseBody", "")).get("purchaseId")
+                pid_b = j.loads(subcases_by_variant["caller_b_purchase_same_key_k"].get("responseBody", "")).get("purchaseId")
+                if not pid_a or not pid_b or pid_a == pid_b:
+                    raise ValidationError("Scenario SEC6 callers A and B must receive distinct purchaseIds (no cross-caller replay)")
+                read_pid_a = j.loads(subcases_by_variant["caller_a_read_k"].get("responseBody", "")).get("purchaseId")
+                read_pid_b = j.loads(subcases_by_variant["caller_b_read_k"].get("responseBody", "")).get("purchaseId")
+                if read_pid_a != pid_a:
+                    raise ValidationError("Scenario SEC6 caller_a_read_k must return caller A's purchaseId")
+                if read_pid_b != pid_b:
+                    raise ValidationError("Scenario SEC6 caller_b_read_k must return caller B's purchaseId")
+            except Exception as e:
+                if not isinstance(e, ValidationError):
+                    raise ValidationError(f"Scenario SEC6 JSON validation error: {e}")
+                raise
+
+        elif case_id == "SEC7":
+            for exp_var in ["spoof_via_header_ignored", "spoof_via_query_ignored", "spoof_via_body_rejected_400"]:
+                if exp_var not in subcases_by_variant:
+                    raise ValidationError(f"Scenario SEC7 missing required subcase '{exp_var}'")
+            if subcases_by_variant["spoof_via_body_rejected_400"].get("observedStatus") != 400:
+                raise ValidationError("Scenario SEC7 spoof_via_body_rejected_400 must return HTTP 400")
+
+        elif case_id == "SEC8":
+            if "quantity_decimal_coercion_rejected" not in subcases_by_variant:
+                raise ValidationError("Scenario SEC8 missing required subcase 'quantity_decimal_coercion_rejected'")
+            if subcases_by_variant["quantity_decimal_coercion_rejected"].get("observedStatus") != 400:
+                raise ValidationError("Scenario SEC8 quantity_decimal_coercion_rejected must return HTTP 400")
+            if "not_available_replayed_after_restock" not in subcases_by_variant:
+                raise ValidationError("Scenario SEC8 missing required subcase 'not_available_replayed_after_restock'")
+            not_avail = subcases_by_variant["not_available_replayed_after_restock"]
+            if not_avail.get("observedStatus") != 200:
+                raise ValidationError("Scenario SEC8 not_available_replayed_after_restock must return HTTP 200")
+            if "NOT_AVAILABLE" not in not_avail.get("responseBody", ""):
+                raise ValidationError("Scenario SEC8 not_available_replayed_after_restock response must be NOT_AVAILABLE")
+
+        elif case_id == "SEC9":
+            for exp_var in ["stateless_request_with_token", "stateless_request_without_token_rejected_401", "public_get_lab_entry_200"]:
+                if exp_var not in subcases_by_variant:
+                    raise ValidationError(f"Scenario SEC9 missing required subcase '{exp_var}'")
+            if subcases_by_variant["stateless_request_without_token_rejected_401"].get("observedStatus") != 401:
+                raise ValidationError("Scenario SEC9 request without token must return HTTP 401 (no session retention)")
+            if subcases_by_variant["public_get_lab_entry_200"].get("observedStatus") != 200:
+                raise ValidationError("Scenario SEC9 public_get_lab_entry_200 must return HTTP 200")
 
     def _validate_migration_scenario(self, case_id, s):
         for req_field in ["caseId", "description", "expected", "observed", "assertionsPassed"]:
